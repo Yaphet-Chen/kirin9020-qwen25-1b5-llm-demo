@@ -28,7 +28,7 @@
 | kd.enable | **False** (PTQ) | config.yaml | 大样本下 KD 无增益（见 §2.9/§三） |
 | linear 策略 | Quant_act_weight_eco | dopt_config.json | aigc 系列不兼容（见四.3） |
 
-**产物**（05_device_files/ 现有成品 = **交付版 g128+中文校准**）：`Qwen25_1b5_kirin9020.omc` 3.7M + `SubGraph_0.weight` 1.27G（omg 成功，s16s4 融合 3136 次；g64 版为 1.35G / 4704 次）。按 REPRODUCE.md 全流程可复现等价产物。
+**产物**（05_device_files_base/ 现有成品 = **base 交付版 g128+中文校准**）：`Qwen25_1b5_Base_kirin9020.omc` 3.7M + `SubGraph_0.weight` 1.27G（omg 成功，s16s4 融合 3136 次；g64 版为 1.35G / 4704 次）。instruct 交付版见 §八。按 REPRODUCE.md / pipeline.sh 全流程可复现等价产物。
 
 ---
 
@@ -346,7 +346,8 @@ int16 的 `s_a` 范围略紧截断缩小下游输入），且逐通道不均匀�
 ```
 stage3.fake_quant_weight.pth ─→ 03_onnx_export（替换权重导出 NPU 亲和 ONNX，产 model.onnx+model.pb+分离embedding）
 stage3.quant_params_file ────→ 04_omc_convert（omg --compress_conf 把 MatMul 融合成 MatMuls16s4Gen）
-                                → Qwen25_1b5_kirin9020.omc + SubGraph_0.weight → 05_device_files 7 文件
+                                → Qwen25_1b5_{Base,Instruct}_kirin9020.omc + SubGraph_0.weight
+                                → 05_device_files_{base,instruct}/ 各 7 文件
 ```
 
 **fake_quant_weight.pth 的职责边界**：只伪量化**权重**（值 = s_w·q 的 float，
@@ -499,6 +500,20 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
   greedy 中文退化、端侧采样参数下与浮点只剩"采样路径不同"（§三生成质量对比）。
 
 解码参数不改变模型质量（PPL 不变），只改变 logit 级误差如何放大为序列级差异。
+
+### 5.4 端云一致性：真机 NPU vs 云侧仿真（三方对比，2026-08-17 实测）
+
+对比三方：云侧 FP(bf16)、云侧量化仿真(fp32, device_compare.py)、真机 NPU int8 推理
+（真机侧由 `05_device_files_base/collect_phone_replies.sh` 自动收集，统一 n=600 口径）。
+完整数据见 `02_quant/device_compare_report_3way_{sampling,greedy}.md`。要点：
+
+- **贪心不是逐 token 一致**：5 条 prompt 中 4 条在 0~30 字节内分叉（英文条 ~100 字节后分叉），
+  与 repetition_penalty 无关（rep=1.0 对照组前缀基本相同）。
+- **embedding 差异已排除**：`device_compare.py --emb` 让云侧仿真加载端侧同款 int8 embedding
+  （两时机替换 + 置零探针验证生效），输出与未替换**逐字节相同**——端侧 int8 embedding 反量化
+  与原始权重最大绝对误差仅 0.0013，不足以翻转任何一步 argmax。
+- 结论：端云分叉源于**计算路径本身**（云=权重假量化+fp32 矩阵乘；端=s16s4 融合算子真 int 计算），
+  属同分布数值实现差，非缺陷；采样口径下三方输出同档可用。
 
 ## 六、精度-体积-耗时权衡
 

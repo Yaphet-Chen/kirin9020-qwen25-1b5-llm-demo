@@ -98,8 +98,10 @@ TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4mi
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
   exp_g128_zh/dopt_config.json exp_g128_zh/train_output/trained.pth \
   --tag repro --n_samples 8192 --data data_zh/test_zh.txt   # 交付版中文口径（QUANTIZATION.md §三）
-python chat_test.py  ../01_prepare/models/Qwen2.5-1.5B \
-  exp_g128_zh/dopt_config.json exp_g128_zh/train_output/trained.pth   # 续写对比（base 勿用 chat 语境）
+python device_compare.py                                     # base 续写对比（端侧采样参数复刻）
+python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
+  qwen25_1b5_instruct_9020/dopt_config.json \
+  qwen25_1b5_instruct_9020/train_output/trained.pth          # 对话对比（chat_test 内置 chat template，instruct 用）
 ```
 
 ## 阶段 ③ ONNX 导出（GPU，~3 分钟）
@@ -161,6 +163,6 @@ bash pipeline.sh instruct pack                          # instruct（自动传�
 | omg 全部 `MatMul don't support` | quant_param_2=True 或加了 output 段 → 改回 False/删 output |
 | 评测/仿真 PPL=nan | fp16 溢出 → 必须 fp32（eval_ppl.py 默认已是） |
 | 量化/评测 OOM | GPU 被他人占用（nvidia-smi 查）→ 等空闲或降 cutoff_len |
-| 对话测试输出乱码 | base 模型不支持 chat template → 用 chat_test.py 的纯续写模式 |
+| 对话测试输出乱码 | base 模型不支持 chat template（坑：chat_test 内置 template）→ base 用 device_compare.py 续写口径；chat 对话用 instruct 产线 |
 | torch CUDA `no kernel image` | torch 版本不含你的 sm 架构（5090 需 2.8+cu128） |
 | 想改 prefill 档位（16/128/三档） | **不支持**——档位在 dopt stage3 的 quant_params_file 里登记锁定为 {decode=1, prefill=64}，多档 omg 编译必失败（QUANTIZATION.md §三 prefill 档位实测） |
