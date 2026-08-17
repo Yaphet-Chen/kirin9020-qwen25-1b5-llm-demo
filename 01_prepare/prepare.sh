@@ -24,14 +24,16 @@ rm -rf 01_prepare/tools
 cp -r 01_prepare/ddk_extracted/tools 01_prepare/tools
 echo "tools 树:"; ls 01_prepare/tools/
 
-echo "===== [3/5] 下载 Qwen2.5-1.5B ====="
-if [ ! -f 01_prepare/models/Qwen2.5-1.5B/model.safetensors ]; then
-  mkdir -p 01_prepare/models
-  python -c "from huggingface_hub import snapshot_download as s; \
-    s('Qwen/Qwen2.5-1.5B', local_dir='01_prepare/models/Qwen2.5-1.5B')"
-else
-  echo "模型已存在，跳过下载"
-fi
+echo "===== [3/5] 下载两个源模型（base + instruct，各 ~3G，已存在则跳过）====="
+mkdir -p 01_prepare/models
+for M in Qwen2.5-1.5B Qwen2.5-1.5B-Instruct; do
+  if [ ! -f "01_prepare/models/$M/model.safetensors" ]; then
+    python -c "from huggingface_hub import snapshot_download as s; \
+      s('Qwen/$M', local_dir='01_prepare/models/$M')"
+  else
+    echo "$M 已存在，跳过"
+  fi
+done
 
 echo "===== [4/5] patchelf 修复 omg interpreter ====="
 # omg 二进制 interpreter 硬编码 /tmp/ld-linux-x86-64-2.35.so.2（跨用户软链 EACCES），

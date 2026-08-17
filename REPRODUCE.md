@@ -75,7 +75,7 @@ bash 01_prepare/make_venv.sh     # uv 建 venv，torch 2.8（输出应含 sm_120
 source 01_prepare/venv/bin/activate
 bash 01_prepare/prepare.sh       # 解压 DDK+插件→tools/、下模型、patchelf 修 omg、cuda_stub
 ```
-prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5-1.5B（3GB）→ **patchelf 把 omg interpreter 改系统 ld**（原始指向 /tmp 软链会 EACCES）→ 建 stub CUDA_HOME（过 deepspeed 的 CUDA_HOME 检查）。
+prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5-1.5B 与 Qwen2.5-1.5B-Instruct 两个源模型（各 ~3GB，已存在跳过）→ **patchelf 把 omg interpreter 改系统 ld**（原始指向 /tmp 软链会 EACCES）→ 建 stub CUDA_HOME（过 deepspeed 的 CUDA_HOME 检查）。
 
 ## 阶段 ② 量化（三段式，GPU，~35 分钟）
 
