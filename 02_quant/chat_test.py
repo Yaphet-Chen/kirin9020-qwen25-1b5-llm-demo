@@ -8,15 +8,7 @@ GPU 对话测试：对比浮点模型 vs 量化仿真模型的实际生成质量
 import sys, os, torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-def get_quanted_model(base_model, dopt_config, quanted_ckpt):
-    from dopt.dopt_lm.do_opt import optimize_model, set_quant_state
-    from dopt.dopt_lm.train import set_calibrate_state
-    model = optimize_model(base_model, dopt_config)
-    model.load_state_dict(torch.load(quanted_ckpt, map_location="cpu"), strict=True)
-    set_quant_state(model, weight_state=True, input_state=True)
-    set_calibrate_state(model, False)
-    model.eval()
-    return model
+from quant_sim import load_quant   # 量化仿真加载（含 env 自举），本脚本原 get_quanted_model 已并入
 
 @torch.no_grad()
 def generate(model, tokenizer, prompt, max_new_tokens=128):
@@ -46,9 +38,7 @@ def main():
     fp = AutoModelForCausalLM.from_pretrained(mp, torch_dtype=torch.float32, device_map=device,
                                               attn_implementation="eager")
     print("加载量化仿真模型...", flush=True)
-    base = AutoModelForCausalLM.from_pretrained(mp, torch_dtype=torch.float32, device_map=device,
-                                                attn_implementation="eager")
-    qm = get_quanted_model(base, cfg, ckpt)
+    qm = load_quant(mp, cfg, ckpt, device=device)
     print("模型就绪。输入问题（空行退出）：\n", flush=True)
 
     prompts = [

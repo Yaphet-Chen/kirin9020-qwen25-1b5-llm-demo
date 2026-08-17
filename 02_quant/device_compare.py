@@ -22,8 +22,8 @@ FP 用 bf16(本机健康路径), 量化仿真用 fp32(dopt 量化算子在 fp16 
 import os, sys, argparse, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-os.environ.setdefault("CUDA_HOME", str(ROOT / "01_prepare" / "cuda_stub"))  # 过 deepspeed 检查
-sys.path.insert(0, str(ROOT / "01_prepare" / "tools" / "tools_dopt" / "dopt_pytorch_py3"))
+
+from quant_sim import load_quant   # 量化仿真加载（env 自举 + emb 两时机替换都在里面）
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -51,28 +51,6 @@ def load_device_embedding(emb_dir, stem):
     assert w.size == VOCAB * HIDDEN, f"embedding_weights 元素数 {w.size} != {VOCAB*HIDDEN}"
     assert s.size == VOCAB, f"dequant_scale 元素数 {s.size} != {VOCAB}"
     return torch.from_numpy(w.reshape(VOCAB, HIDDEN).astype(np.float32) * s[:, None])
-
-
-def load_quant(cfg, ckpt, emb=None):
-    """量化仿真模型。emb 不为空时改用端侧同款 int8 embedding——必须在两个时机替换
-    （首版教训：只事后替换无效，optimize_model 会接管/复制模块权重）：
-      ① optimize_model 之前 → dopt 接管的就是替换后的权重；
-      ② load_state_dict 之后 → 防 ckpt 把 embedding 覆盖回原始值。"""
-    from dopt.dopt_lm.do_opt import optimize_model, set_quant_state
-    from dopt.dopt_lm.train import set_calibrate_state
-    base = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float32, device_map=DEV)
-    if emb is not None:
-        with torch.no_grad():
-            base.model.embed_tokens.weight.copy_(emb.to(base.model.embed_tokens.weight.device))
-    m = optimize_model(base, str(cfg))
-    m.load_state_dict(torch.load(str(ckpt), map_location="cpu"), strict=True)
-    if emb is not None:
-        with torch.no_grad():
-            m.model.embed_tokens.weight.copy_(emb.to(m.model.embed_tokens.weight.device))
-    set_quant_state(m, weight_state=True, input_state=True)
-    set_calibrate_state(m, False)
-    m.eval()
-    return m
 
 
 @torch.no_grad()
@@ -134,7 +112,7 @@ def main():
     if a.emb:
         emb = load_device_embedding(a.emb_dir, a.emb_stem)
         print(f"device int8 embedding loaded: {tuple(emb.shape)} fp32(反量化)", flush=True)
-        qm = load_quant(cfg, ckpt, emb=emb)
+        qm = load_quant(MODEL, cfg, ckpt, emb=emb)
         if a.probe:
             with torch.no_grad():
                 qm.model.embed_tokens.weight.zero_()
@@ -152,7 +130,7 @@ def main():
     del fp; torch.cuda.empty_cache()
 
     print(f"\n=========== QUANT (fp32) {a.config} ===========", flush=True)
-    qm = load_quant(cfg, ckpt)
+    qm = load_quant(MODEL, cfg, ckpt)
     run(qm, tok, "QUANT", a.n, a.chat, greedy=a.greedy)
 
 

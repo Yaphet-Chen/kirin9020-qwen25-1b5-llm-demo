@@ -9,18 +9,7 @@ import sys, os, argparse, math
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-
-def get_quanted_model(base_model, dopt_config, quanted_ckpt):
-    """量化仿真：浮点模型插入量化算子并加载量化权重。
-    API 实测位置: optimize_model 在 dopt.dopt_lm.do_opt（指南写的 opt_main 有误）"""
-    from dopt.dopt_lm.do_opt import optimize_model, set_quant_state
-    from dopt.dopt_lm.train import set_calibrate_state
-    model = optimize_model(base_model, dopt_config)
-    model.load_state_dict(torch.load(quanted_ckpt, map_location="cpu"), strict=True)
-    set_quant_state(model, weight_state=True, input_state=True)
-    set_calibrate_state(model, False)
-    model.eval()
-    return model
+from quant_sim import load_quant   # 量化仿真加载（含 env 自举），本脚本原 get_quanted_model 已并入
 
 
 @torch.no_grad()
@@ -74,7 +63,7 @@ def main():
     enc = tok(text, return_tensors="pt")
     input_ids = enc.input_ids
     # 截断到模型 max_position 之内（避免 position_ids 越界导致 RoPE nan）
-    max_pos = 131072  # Qwen2.5-1.5B max_position_embeddings
+    max_pos = 32768   # Qwen2.5-1.5B(max/instruct 同) max_position_embeddings
     if input_ids.size(1) > max_pos:
         input_ids = input_ids[:, :max_pos]
     if args.n_samples > 0 and input_ids.size(1) > args.n_samples:
@@ -90,8 +79,7 @@ def main():
 
     # 量化仿真 PPL（fp32：量化算子反量化后 fp32 累加，避免 fp16 溢出）
     if args.quant_ckpt and os.path.exists(args.quant_ckpt):
-        base = AutoModelForCausalLM.from_pretrained(args.model_path, torch_dtype=torch.float32, device_map=device)
-        qm = get_quanted_model(base, args.dopt_config, args.quant_ckpt)
+        qm = load_quant(args.model_path, args.dopt_config, args.quant_ckpt, device=device)
         q_ppl, n2 = compute_ppl(qm, input_ids, device)
         print(f"[QUANT-{args.tag}] PPL = {q_ppl:.4f}  (tokens={n2})")
         print(f"[DELTA-{args.tag}] ΔPPL = {q_ppl - fp_ppl:+.4f}  (相对劣化 {(q_ppl/fp_ppl - 1)*100:+.2f}%)")
