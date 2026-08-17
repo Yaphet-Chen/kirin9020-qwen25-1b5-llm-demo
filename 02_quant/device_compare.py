@@ -29,11 +29,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 DEV = "cuda"
-MODEL = ROOT / "01_prepare" / "models" / "Qwen2.5-1.5B"
+MODEL = pathlib.Path(os.environ.get("DC_MODEL", str(ROOT / "01_prepare" / "models" / "Qwen2.5-1.5B")))  # DC_MODEL 可换 instruct 模型
 VOCAB, HIDDEN = 151936, 1536
 # 端侧 context.json 参数（改这里保持与部署一致）
 import os as _os
-SEED, TOP_K, TOP_P, TEMP, REP = 99, 16, 0.95, 0.6, float(_os.environ.get("DC_REP", "1.2"))
+SEED = int(_os.environ.get("DC_SEED", "99")); TOP_K = int(_os.environ.get("DC_TOP_K", "16")); TOP_P = float(_os.environ.get("DC_TOP_P", "0.95")); TEMP = float(_os.environ.get("DC_TEMP", "0.6")); REP = float(_os.environ.get("DC_REP", "1.2"))  # 环境变量可覆盖, 对齐 instruct 采样参数用
 
 CONT_PROMPTS = [
     "长城是中国古代的伟大工程，", "秋天到了，", "人工智能的发展，",
