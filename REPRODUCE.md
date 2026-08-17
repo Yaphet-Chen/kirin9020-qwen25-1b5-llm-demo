@@ -25,7 +25,8 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 1. **GPU**：`nvidia-smi` 确认空闲。撰写本文时有 14.5G 常驻 python + 1.9G lmstudio 占卡（此前 c1024 实验 OOM 的元凶），跑阶段②前需协调释放。c512 档在 ~14G 空闲下实测可跑（instruct 产线 2026-08-17 验证）。
 2. 磁盘 ≥40G 余量（6G×2 pth + 6.7G fake_quant + 5.9G pb 峰值叠加）。
 3. 演示 stage1 首跑（生成配置步骤）前先 `rm -rf 02_quant/qwen25_1b5_9020`——**dopt_config.json 已存在时，第一次 `run.sh stage1` 不生成配置而直接进入 19 分钟重量化**。不想重跑量化则从 stage3 开始（trained.pth 已在）。`pipeline.sh` 已内置该防呆（未完成的 testcase 自动清除重跑）。
-4. `04_omc_convert/` 下的 `model128.onnx/.pb` 与 `omg_t16/t128/3tier/e128.log` 是分档实验的**失败残留**（4 个日志结尾均 `return FAIL`），不在交付链路上。
+4. `04_omc_convert/` 的 `model.onnx/.pb/quant_params_file` 是转换工作副本，转换后可删（2026-08-17 已清理，
+   含历史多档实验失败残留 model128.*/omg_*.log——档位锁定教训见 QUANTIZATION.md §三）。
 
 ## 前置条件
 

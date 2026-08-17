@@ -22,8 +22,10 @@ done
 cp "$ONNX_DIR/model.onnx" ./model.onnx
 cp "$ONNX_DIR/model.pb" ./model.pb
 cp "$QUANT_PARAMS" ./quant_params_file
-# 注：本目录的 model128.onnx/.pb 与 omg_t16/t128/3tier/e128.log 是多档实验失败残留
-#（档位被 quant_params_file 锁定 {1,64}，见 QUANTIZATION.md §三），本脚本不使用它们
+# 注：本目录的 model.onnx/.pb/quant_params_file 是每次转换的工作副本（源头在 03_onnx_export
+# 与 02_quant/<testcase>/），转换完成后可删（清理协议已按此执行，2026-08-17）。
+# 历史：model128.onnx/.pb 与 omg_t16/t128/3tier/e128.log 多档实验失败残留已清理
+#（档位被 quant_params_file 锁定 {1,64}，见 QUANTIZATION.md §三）。
 
 # 构造 input_shape / input_type / output_type（28 层）
 LAYERS=28; HIDDEN=1536; KVLEN=2048; KVHEAD=2; HEADDIM=128

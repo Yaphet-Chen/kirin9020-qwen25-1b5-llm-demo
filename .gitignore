@@ -36,7 +36,7 @@ quant_params_file
 05_device_files*/tokenizer.json
 
 # 日志与临时
-logs/*.log
+logs/
 *.log
 
 # Python / 编辑器
