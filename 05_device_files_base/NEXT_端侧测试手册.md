@@ -98,6 +98,20 @@ Windows 直接双击:
 - **想改生成行为**(最大 token 数、贪心解码等):改 `05_device_files/executor.json`
   后重推该文件并重启 App,无需重新编译。
 
+## 四、instruct 版本(2026-08-17 已实测通过)
+
+- instruct 模型文件在云侧 `05_device_files_instruct/`(omc + SubGraph_0.weight + model_instruct_* embedding
+  + tokenizer + executor.json + context_next.json),推机方式与 base 相同;注意 `SubGraph_0.weight` 与 base 同名,
+  切换模型就是整套文件互换(base 文件留在本地 `05_device_files/` 可回推)。
+- **instruct 需要 chat template 才有正常对话行为**。demo 把输入框文本原样当 prompt,
+  手动聊天前需在 `llm_demo.cpp` 的 ModelInfer 里给输入套
+  `<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n`,或临时用 test_prompt.txt 钩子传入包好模板的文本。
+- 实测(套 chat template + test_prompt.txt 钩子):"你好,请用一句话介绍你自己" → 25 token 正常作答,
+  `<|im_end|>` 自然停止;"请用中文解释什么是模型量化" → 297 token 结构化回答,decode 30.2ms/token。
+- instruct 采样参数(Qwen2.5 官方推荐): top-k 20 / top-p 0.8 / temp 0.7 / rep 1.1,见
+  `05_device_files_instruct/context_next.json`;`stop_sequence` 用 `<|im_end|>` 即可(instruct 会自然产出)。
+
+
 ## 附:改了哪些文件
 
 - `CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp`:InitParam 笔误修正 + 日志格式修正
