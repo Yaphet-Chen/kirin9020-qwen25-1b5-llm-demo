@@ -1,0 +1,42 @@
+# ===== 大型可重建产物（靠脚本重新生成）=====
+01_prepare/venv/
+01_prepare/tools/
+01_prepare/models/
+01_prepare/cuda_stub/
+01_prepare/ddk_extracted/
+01_prepare/plugin_extracted/
+
+# 量化工程产物与试验目录
+02_quant/qwen25_1b5_9020/
+02_quant/exp_*/
+02_quant/data_zh/
+02_quant/*_config.yaml
+
+# 通用兜底：任何位置的量化/模型产物
+*.pth
+*.pb
+*.omc
+*.weight
+*embedding_weights*
+*embedding_dequant_scale*
+quant_params_file
+
+# ONNX 导出 / OMC 转换产物
+03_onnx_export/output*/
+03_onnx_export/dump/
+03_onnx_export/npu_tuned_export/
+04_omc_convert/model.onnx
+04_omc_convert/quant_params_file
+04_omc_convert/Qwen25_1b5_kirin9020/
+05_device_files/tokenizer.json
+
+# 日志与临时
+logs/*.log
+*.log
+
+# Python / 编辑器
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,40 @@
+# 导出工程配置 yaml —— Qwen2.5-1.5B / kirin9020
+# 注意: 原仓库模板第35-36行有 hf_model_dtype 笔误（两行都写 hf_model_device），这里已修正
+embedding_config:
+  embedding_separate: True
+  embedding_as_fp16: False
+  mul_twice: False
+
+no_gemm: True
+mock_as_s16: False
+output_pos:
+
+model_arch: qwen2
+
+# 绝对路径（运行前按实际修改，或用 REPRODUCE.md 里的 sed 自动填充）
+hf_model_path: __ROOT__/01_prepare/models/Qwen2.5-1.5B
+config_file:  __ROOT__/02_quant/exp_g128_zh/dopt_config.json
+quant_pth:    __ROOT__/02_quant/exp_g128_zh/train_output/fake_quant_weight.pth
+
+run_mode: hardware
+
+dump_path: __ROOT__/03_onnx_export/dump
+output_dir: __ROOT__/03_onnx_export/output
+
+lora:
+  enable: False
+  megatron: False
+  lora_scale: 4
+  lora_config:
+  lora_ckpt:
+
+hf_model_device: "cpu"
+hf_model_dtype: "torch.float32"
+onnx_output_model_name: "model"
+onnx_opset: 12
+batch: 1
+kv_cache_max_len: 2048
+
+layers: 28
+seq_len:
+  - 64

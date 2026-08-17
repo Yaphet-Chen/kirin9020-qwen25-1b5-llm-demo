@@ -1,0 +1,37 @@
+# Qwen2.5-1.5B / kirin9020 量化配置（当前交付版：g128 + 中文校准）
+# 决策依据（QUANTIZATION.md §三 2×2 矩阵）:
+#   - g128: 端侧体积优先（SubGraph_0.weight 1.35G→1.27G），代价约 +1 PPL
+#   - 中文校准(zh维基): 中文劣化 25.9%→17.1%；英文 +39.6%（中文场景可接受）
+#   - 如需中英双语/英文优先: 改回 train_files: wikitext2（wiki 校准 en=19.66 档）
+# 语料重建: 02_quant/data_zh/（wikimedia wikipedia zh 流式，须切成 ≥num_samples 行！stage2 按行索引）
+kd:
+  enable: False
+  loss: mse
+  micro_batch_size: 1
+  gradient_accumulation_steps: 1
+  weight_decay: 0.0
+  warmup_steps: 1
+  num_epochs: 1
+  learning_rate: 1.0e-4
+  eval_step: 1
+  logging_step: 10
+  lr_scheduler_type: cosine
+  trainable_keys:
+    - quant_alpha
+    - norm
+  no_split_module_classes:
+    - Qwen2DecoderLayer
+
+dataset:
+  train_files: /home/chenyipei/test_omc/qwen25_1b5_run/02_quant/data_zh/dataset_zh.json
+  train_samples: 1024
+  ptq_samples: 1024
+
+extra_training_config:
+  fp16: False
+
+cutoff_len: 512
+num_samples: 1024
+quant_param_2: False
+embedding_separate: True
+lm_head_size:
