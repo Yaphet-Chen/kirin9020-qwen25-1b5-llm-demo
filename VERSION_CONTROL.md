@@ -16,19 +16,26 @@
 跟踪的（进 git）:
   .gitignore
   REPRODUCE.md / QUANTIZATION.md / VERSION_CONTROL.md
+  pipeline.sh  profiles/{base.env, instruct.env}          # 统一产线入口与双产线差异声明
   01_prepare/{make_venv.sh, prepare.sh}
-  02_quant/{config.yaml, run.sh, edit_dopt_config.py, dopt_config.json.example,
-            run_experiment.sh, eval_ppl.py, chat_test.py, _autopatch/sitecustomize.py}
-  03_onnx_export/{export.sh, model_info_target.yaml}
+  02_quant/{config.yaml, instruct_config.yaml, run.sh, edit_dopt_config.py,
+            dopt_config.json.example, run_experiment.sh, eval_ppl.py, chat_test.py,
+            device_compare.py, _autopatch/sitecustomize.py}
+  02_quant/data_zh/build_corpus.py                        # base 校准语料构建脚本
+  02_quant/data_chat/build_corpus_chat.py                 # instruct 校准语料构建脚本
+  03_onnx_export/{export.sh, model_info_target.yaml, model_info_instruct.yaml}
   04_omc_convert/convert.sh
-  05_device_files/{context.json, executor.json, pack.sh}
+  05_device_files_base/{context*.json, executor.json, pack.sh, push_to_device_next.*,
+                        diagnose_load.bat, NEXT_端侧测试手册.md}
+  05_device_files_instruct/{context*.json, executor.json, push_to_device_next.*,
+                        diagnose_load.bat, README_DEMO.md}   # pack.sh 复用 base 目录的
 
 不跟踪的（.gitignore 排除，可重建）:
   01_prepare/{venv,tools,models,cuda_stub}
-  02_quant/{qwen25_1b5_9020/, exp_*/, *_config.yaml}   量化产物与试验目录
+  02_quant/{qwen25_1b5_9020/, qwen25_1b5_instruct_9020/, exp_*/, data_zh/, data_chat/, *_config.yaml}
   03_onnx_export/{output*/,dump/,npu_tuned_export/}    onnx 产物
-  04_omc_convert/{model.*,Qwen25_1b5_kirin9020/}
-  05_device_files/{*.omc,*.weight,embedding*,tokenizer.json}
+  04_omc_convert/{model.*,Qwen25_1b5_*/}
+  05_device_files*/{*.omc,*.weight,embedding*,tokenizer.json}
   logs/
 ```
 

@@ -1,0 +1,39 @@
+# Qwen2.5-1.5B-Instruct / kirin9020 量化配置（instruct 交付版：g64 + 中文对话校准）
+# 与 base 交付版（config.yaml）的差异：
+#   1. 模型: run.sh 用 MODEL=...Qwen2.5-1.5B-Instruct 覆盖（见 run_instruct.sh）
+#   2. 校准语料: data_chat/dataset_chat_zh.json —— Belle 多轮+单轮中文对话，
+#      经 Qwen chat template 渲染成 ChatML 文本（对齐端侧部署的真实输入分布）
+#   3. group_size: 64（int4 per-group 64，精度优先；base 交付版为 g128 体积优先）
+# 其余沿用 base 实验矩阵的结论（QUANTIZATION.md §一/§三）：
+#   s1024 + c512 + lm_head 保 fp + PTQ（KD 大样本无增益）
+kd:
+  enable: False
+  loss: mse
+  micro_batch_size: 1
+  gradient_accumulation_steps: 1
+  weight_decay: 0.0
+  warmup_steps: 1
+  num_epochs: 1
+  learning_rate: 1.0e-4
+  eval_step: 1
+  logging_step: 10
+  lr_scheduler_type: cosine
+  trainable_keys:
+    - quant_alpha
+    - norm
+  no_split_module_classes:
+    - Qwen2DecoderLayer
+
+dataset:
+  train_files: /home/chenyipei/test_omc/qwen25_1b5_run/02_quant/data_chat/dataset_chat_zh.json
+  train_samples: 1024
+  ptq_samples: 1024
+
+extra_training_config:
+  fp16: False
+
+cutoff_len: 512
+num_samples: 1024
+quant_param_2: False
+embedding_separate: True
+lm_head_size:

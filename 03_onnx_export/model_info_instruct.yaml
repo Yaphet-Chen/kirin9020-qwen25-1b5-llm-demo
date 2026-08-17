@@ -1,0 +1,41 @@
+# 导出工程配置 yaml —— Qwen2.5-1.5B-Instruct / kirin9020（int4 per-group 64 交付版）
+# 与 base 版 model_info_target.yaml 的差异仅三处：
+#   hf_model_path → Instruct 模型；config_file/quant_pth → instruct 量化工程；
+#   output_dir → output_instruct（隔离 base 产物，不互相覆盖）
+embedding_config:
+  embedding_separate: True
+  embedding_as_fp16: False
+  mul_twice: False
+
+no_gemm: True
+mock_as_s16: False
+output_pos:
+
+model_arch: qwen2
+
+hf_model_path: __ROOT__/01_prepare/models/Qwen2.5-1.5B-Instruct
+config_file:  __ROOT__/02_quant/qwen25_1b5_instruct_9020/dopt_config.json
+quant_pth:    __ROOT__/02_quant/qwen25_1b5_instruct_9020/train_output/fake_quant_weight.pth
+
+run_mode: hardware
+
+dump_path: __ROOT__/03_onnx_export/dump
+output_dir: __ROOT__/03_onnx_export/output_instruct
+
+lora:
+  enable: False
+  megatron: False
+  lora_scale: 4
+  lora_config:
+  lora_ckpt:
+
+hf_model_device: "cpu"
+hf_model_dtype: "torch.float32"
+onnx_output_model_name: "model"
+onnx_opset: 12
+batch: 1
+kv_cache_max_len: 2048
+
+layers: 28
+seq_len:
+  - 64

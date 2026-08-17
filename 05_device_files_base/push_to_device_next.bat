@@ -1,20 +1,49 @@
 @echo off
 rem ================================================================
 rem Route B (HarmonyOS NEXT): push 7 model/config files into app sandbox
-rem Windows version - double click or run from CMD/PowerShell.
-rem Keep this file inside 05_device_files\ (it locates files by its own path).
+rem Generic version: works in BOTH delivery dirs (05_device_files_base\
+rem and 05_device_files_instruct\) - it auto-detects the *.omc name
+rem (Qwen25_1b5_Base_*.omc / Qwen25_1b5_Instruct_*.omc) and the
+rem embedding file names in its own directory. Keep this file inside
+rem the delivery dir (it locates files by its own path).
 rem NOTE 1: hdc v3.x prints nothing and exits 0 when it fails, so every
 rem         step below checks the captured output instead of exit codes.
 rem NOTE 2: DevEco Studio may run its hdc server on a non-default port
 rem         (e.g. 7035). If the default port sees no device, we reuse the
 rem         port of an already-running hdc server, otherwise our own server
 rem         cannot grab the USB device from it.
+rem NOTE 3: switching demo models (base <-> instruct) requires pushing the
+rem         FULL 7-file set: SubGraph_0.weight has a fixed name shared by
+rem         both models; a partial push would mix old/new files.
 rem ================================================================
 setlocal EnableDelayedExpansion
 
 set "REAL_DIR=/data/app/el2/100/base/com.huawei.cannkit.llmengine/haps/entry/files"
 set "SRC=%~dp0"
 set "TMP_OUT=%TEMP%\cannkit_hdc_out.txt"
+
+rem ---- auto-detect omc / embedding file names in this dir ----
+set "OMC_FILE="
+for %%F in ("%SRC%*.omc") do if not defined OMC_FILE set "OMC_FILE=%%~nxF"
+set "EMB_W="
+for %%F in ("%SRC%*.embedding_weights") do if not defined EMB_W set "EMB_W=%%~nxF"
+set "EMB_S="
+for %%F in ("%SRC%*.embedding_dequant_scale") do if not defined EMB_S set "EMB_S=%%~nxF"
+if not defined OMC_FILE (
+    echo [FAIL] no *.omc found in %SRC%. Run pack first ^(pipeline.sh ^<base^|instruct^> pack^).
+    goto :fail
+)
+if not defined EMB_W (
+    echo [FAIL] no *.embedding_weights found in %SRC%. Run pack first.
+    goto :fail
+)
+if not defined EMB_S (
+    echo [FAIL] no *.embedding_dequant_scale found in %SRC%. Run pack first.
+    goto :fail
+)
+set "MODEL_TAG=BASE"
+echo !OMC_FILE! | findstr /C:"Instruct" >nul && set "MODEL_TAG=INSTRUCT"
+echo ^>^>^>^>^> pushing model: [!MODEL_TAG!] !OMC_FILE!
 
 rem ---- locate hdc: PATH first, then DevEco Studio default install ----
 set "HDC="
@@ -56,13 +85,13 @@ for %%A in ("%TMP_OUT%") do if %%~zA equ 0 (
 )
 
 rem ---- push 7 files: local file -> device file name ----
-call :push "Qwen25_1b5_kirin9020.omc"              "Qwen25_1b5_kirin9020.omc"
-call :push "SubGraph_0.weight"                     "SubGraph_0.weight"
-call :push "model_64_2048.embedding_weights"       "model_64_2048.embedding_weights"
-call :push "model_64_2048.embedding_dequant_scale" "model_64_2048.embedding_dequant_scale"
-call :push "tokenizer.json"                        "tokenizer.json"
-call :push "context_next.json"                     "context.json"
-call :push "executor.json"                         "executor.json"
+call :push "!OMC_FILE!"                      "!OMC_FILE!"
+call :push "SubGraph_0.weight"               "SubGraph_0.weight"
+call :push "!EMB_W!"                         "!EMB_W!"
+call :push "!EMB_S!"                         "!EMB_S!"
+call :push "tokenizer.json"                  "tokenizer.json"
+call :push "context_next.json"               "context.json"
+call :push "executor.json"                   "executor.json"
 if defined PUSH_FAILED goto :fail
 
 rem ---- fix permissions ----
@@ -73,8 +102,8 @@ rem ---- final verification: all 7 files must appear in device dir ----
 echo ---- files on device ----
 type "%TMP_OUT%"
 set "MISSING="
-for %%N in (Qwen25_1b5_kirin9020.omc SubGraph_0.weight model_64_2048.embedding_weights model_64_2048.embedding_dequant_scale tokenizer.json context.json executor.json) do (
-    findstr /C:"%%N" "%TMP_OUT%" >nul || set "MISSING=!MISSING %%N"
+for %%N in ("!OMC_FILE!" SubGraph_0.weight "!EMB_W!" "!EMB_S!" tokenizer.json context.json executor.json) do (
+    findstr /C:"%%~N" "%TMP_OUT%" >nul || set "MISSING=!MISSING! %%~N"
 )
 if defined MISSING (
     echo [FAIL] missing on device:!MISSING!
@@ -82,8 +111,9 @@ if defined MISSING (
 )
 
 echo.
-echo [DONE] All 7 files verified. App reads sandbox path /data/storage/el2/base/haps/entry/files/
-echo        Fully close and restart the app to load the model.
+echo [DONE] [!MODEL_TAG!] All 7 files verified. App reads sandbox path /data/storage/el2/base/haps/entry/files/
+echo        Fully close and restart the app to load the model. To demo the OTHER
+echo        model, run the push script inside the other delivery dir (full 7-file set).
 goto :end
 
 rem ---- find listening port of an already-running hdc server ----

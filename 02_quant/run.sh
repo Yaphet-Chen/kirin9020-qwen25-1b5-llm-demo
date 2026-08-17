@@ -11,8 +11,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/02_quant"
 
 # ===== 路径（按实际调整）=====
+# MODEL 环境变量可换模型（instruct 版用 Qwen2.5-1.5B-Instruct，见 run_instruct.sh）
 qlibs="$ROOT/01_prepare/tools/tools_dopt/dopt_pytorch_py3"
-model_path="$ROOT/01_prepare/models/Qwen2.5-1.5B"
+model_path="${MODEL:-$ROOT/01_prepare/models/Qwen2.5-1.5B}"
 testcase="${TESTCASE:-qwen25_1b5_9020}"
 cfg="${CFG:-config.yaml}"
 

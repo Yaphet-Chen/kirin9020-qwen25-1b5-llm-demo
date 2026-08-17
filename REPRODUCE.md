@@ -1,17 +1,31 @@
-# kirin9020 平台 Qwen2.5-1.5B 全流程复现指引（操作手册）
+# kirin9020 平台 Qwen2.5-1.5B（base + instruct 双产线）全流程复现指引（操作手册）
 
 > 本文只讲**怎么跑**。量化机制、为什么这样配、实验数据、踩坑记录见 **QUANTIZATION.md**；git 工作流见 **VERSION_CONTROL.md**。
-> **两个配方口径**（取舍依据见 QUANTIZATION.md §三 中英 2×2 矩阵）：
-> - **当前交付版 = g128 + 中文校准**（`02_quant/config.yaml` 现状）：中文 PPL 14.76（劣化 17.1%），SubGraph 1.27G；
-> - **英文最优版 = g64 + wikitext2**：英文 PPL 19.66（劣化 12.44%）。
-> `05_device_files/` 中的成品是**交付版**（omc 3.7M + weight 1.27G）。
+> **两条产线、各自最优配方**（统一入口 `pipeline.sh`，详见下节）：
+> - **base 交付版 = Qwen2.5-1.5B + g128 + zh维基校准**（续写演示）：中文 PPL 14.76（劣化 17.1%），SubGraph 1.27G；
+> - **instruct 交付版 = Qwen2.5-1.5B-Instruct + g64 + zh对话校准**（ChatML，对话演示）：配方与评测见 QUANTIZATION.md §八。
+> - 历史口径：英文最优版 = g64 + wikitext2（英文 PPL 19.66，劣化 12.44%）。
+> `05_device_files_base/` 与 `05_device_files_instruct/` 中是两套成品（文件名带 `_Base_` / `_Instruct_` 标记）。
+
+## 统一产线入口（演示推荐用法）
+
+```bash
+bash pipeline.sh base              # base 全流程（量化已有产物会自动跳过）
+bash pipeline.sh instruct          # instruct 全流程
+bash pipeline.sh <base|instruct> [quant|eval|export|convert|pack|status]   # 单阶段
+FORCE=1 bash pipeline.sh <p> quant # 强制重量化
+```
+
+- 同一套阶段脚本（02~05），差异全部收在 `profiles/{base,instruct}.env`：模型 / group_size / 校准语料 / 导出 yaml / 产物命名 / 交付目录。
+- **演示流程**：先 `bash pipeline.sh base` 再 `bash pipeline.sh instruct`，产物分别落在 `05_device_files_base/`、`05_device_files_instruct/`；两个目录各自拷到连手机的 Windows 机，分别跑各自的 `push_to_device_next.bat`（换模型必须整组 7 文件重推，`SubGraph_0.weight` 两模型同名）。
+- **命名约定**（base/instruct 一眼可区分）：omc `Qwen25_1b5_{Base,Instruct}_kirin9020.omc`；embedding `model_{base,instruct}_64_2048.embedding_*`；量化工程 `02_quant/{exp_g128_zh,qwen25_1b5_instruct_9020}`。
 
 ## 现场演示预检
 
-1. **GPU**：`nvidia-smi` 确认空闲。撰写本文时有 14.5G 常驻 python + 1.9G lmstudio 占卡（此前 c1024 实验 OOM 的元凶），跑阶段②前需协调释放。
+1. **GPU**：`nvidia-smi` 确认空闲。撰写本文时有 14.5G 常驻 python + 1.9G lmstudio 占卡（此前 c1024 实验 OOM 的元凶），跑阶段②前需协调释放。c512 档在 ~14G 空闲下实测可跑（instruct 产线 2026-08-17 验证）。
 2. 磁盘 ≥40G 余量（6G×2 pth + 6.7G fake_quant + 5.9G pb 峰值叠加）。
-3. 演示 stage1 首跑（生成配置步骤）前先 `rm -rf 02_quant/qwen25_1b5_9020`——**dopt_config.json 已存在时，第一次 `run.sh stage1` 不生成配置而直接进入 19 分钟重量化**。不想重跑量化则从 stage3 开始（trained.pth 已在）。
-4. `04_omc_convert/` 下的 `model128.onnx/.pb` 与 `omg_t16/t128/3tier/e128.log` 是分档实验的**失败残留**（4 个日志结尾均 `return FAIL`），不在交付链路上；交付产物 = `Qwen25_1b5_kirin9020/`。
+3. 演示 stage1 首跑（生成配置步骤）前先 `rm -rf 02_quant/qwen25_1b5_9020`——**dopt_config.json 已存在时，第一次 `run.sh stage1` 不生成配置而直接进入 19 分钟重量化**。不想重跑量化则从 stage3 开始（trained.pth 已在）。`pipeline.sh` 已内置该防呆（未完成的 testcase 自动清除重跑）。
+4. `04_omc_convert/` 下的 `model128.onnx/.pb` 与 `omg_t16/t128/3tier/e128.log` 是分档实验的**失败残留**（4 个日志结尾均 `return FAIL`），不在交付链路上。
 
 ## 前置条件
 
@@ -27,23 +41,28 @@
 ```
 qwen25_1b5_run/
 ├── REPRODUCE.md / QUANTIZATION.md / VERSION_CONTROL.md
-├── 01_prepare/                  # 阶段① 环境
+├── pipeline.sh                   # ★ 统一产线入口（base|instruct × 各阶段）
+├── profiles/                     # ★ 产线差异声明（模型/group/语料/命名/交付目录）
+│   ├── base.env  instruct.env
+├── 01_prepare/                   # 阶段① 环境
 │   ├── make_venv.sh  prepare.sh
-│   ├── venv/ tools/ models/Qwen2.5-1.5B/ cuda_stub/   # (生成)
-├── 02_quant/                    # 阶段② 量化
-│   ├── config.yaml              #   交付版配方（g128+中文校准/c512/s1024/quant_param_2=False）
-│   ├── data_zh/                 #   中文校准语料（dataset_zh.json，2408 条记录）
-│   ├── run.sh                   #   三段式入口（TESTCASE/CFG 环境变量可覆盖）
-│   ├── edit_dopt_config.py      #   策略编辑（group/lm_head保fp/策略替换）
-│   ├── run_experiment.sh        #   试验驱动（自动 config+三段式+PPL 评测）
-│   ├── eval_ppl.py              #   PPL 精度评测（fp32 仿真）
-│   ├── chat_test.py             #   生成质量测试（纯续写，base 模型勿用 chat template）
-│   ├── _autopatch/              #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
-│   └── qwen25_1b5_9020/         #   (生成) 量化工程
-├── 03_onnx_export/              # 阶段③ export.sh + model_info_target.yaml → (生成) onnx
-├── 04_omc_convert/              # 阶段④ convert.sh → (生成) Qwen25_1b5_kirin9020/
-├── 05_device_files/             # 阶段⑤ pack.sh + 端侧 7 文件（最终交付）
-└── logs/                        # 各阶段日志
+│   ├── venv/ tools/ cuda_stub/   # (生成)
+│   └── models/Qwen2.5-1.5B/  Qwen2.5-1.5B-Instruct/   # (生成/下载)
+├── 02_quant/                     # 阶段② 量化（三段式，run.sh 吃 TESTCASE/CFG/MODEL 环境变量）
+│   ├── config.yaml               #   base 默认配方（g128+zh维基，历史）
+│   ├── instruct_config.yaml      #   instruct 配方（g64+zh对话校准）
+│   ├── data_zh/                  #   base 校准语料（zh维基 2408 行）
+│   ├── data_chat/                #   instruct 校准语料（Belle 多轮+单轮 ChatML 2401 行）
+│   ├── run.sh  edit_dopt_config.py  run_experiment.sh
+│   ├── eval_ppl.py  chat_test.py  device_compare.py
+│   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
+│   ├── exp_g128_zh/              #   (生成) base 交付量化工程（g128+zh）
+│   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
+├── 03_onnx_export/               # 阶段③ export.sh（EXPORT_YAML 可换）+ base/instruct 两份 yaml
+├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
+├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push 脚本 + 测试手册）
+├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
+└── logs/                         # 各阶段日志
 ```
 
 ---
@@ -59,42 +78,49 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 
 ## 阶段 ② 量化（三段式，GPU，~35 分钟）
 
-> 校准语料：交付版用 `data_zh/dataset_zh.json`（config.yaml 现状）；英文版把 `train_files` 改回 `wikitext2`。
-> group_size：交付版 **128**，英文最优版 **64**（下按交付版写，英文版把 128 换 64）。
+> **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
+> 手动方式（以 base 为例；instruct 把 testcase/config/model 换成 instruct 版，或看 pipeline.sh do_quant）：
 
 ```bash
 source 01_prepare/venv/bin/activate
 cd 02_quant
-bash run.sh stage1               # ①生成 dopt_config.json（198 节点全 float；重跑需先删 qwen25_1b5_9020/，见预检3）
-python edit_dopt_config.py qwen25_1b5_9020/dopt_config.json 128 --keep-lm-head-fp
+TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
+python edit_dopt_config.py exp_g128_zh/dopt_config.json 128 --keep-lm-head-fp
                                  # ②改策略：embed=MinMax, 196 linear=eco(g128,in16), lm_head=float
-bash run.sh stage1               # ③权重量化 GPTQ ~19min → weight quant done!!!
-bash run.sh stage2               # ④激活校准 EMA ~10min → quant done !!!
-bash run.sh stage3               # ⑤参数提取 ~4min → quant params file build done
+TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
+TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
+TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
 ```
 
 **（可选）验证精度与生成质量**
 ```bash
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
-  qwen25_1b5_9020/dopt_config.json qwen25_1b5_9020/train_output/trained.pth \
-  --tag repro --n_samples 8192   # 期望 QUANT PPL ≈ 19.66（FP=17.49）
+  exp_g128_zh/dopt_config.json exp_g128_zh/train_output/trained.pth \
+  --tag repro --n_samples 8192 --data data_zh/test_zh.txt   # 交付版中文口径（QUANTIZATION.md §三）
 python chat_test.py  ../01_prepare/models/Qwen2.5-1.5B \
-  qwen25_1b5_9020/dopt_config.json qwen25_1b5_9020/train_output/trained.pth   # 续写对比
+  exp_g128_zh/dopt_config.json exp_g128_zh/train_output/trained.pth   # 续写对比（base 勿用 chat 语境）
 ```
 
 ## 阶段 ③ ONNX 导出（GPU，~3 分钟）
 ```bash
-cd .. && bash 03_onnx_export/export.sh    # 日志: generating finished
+bash 03_onnx_export/export.sh                          # base（默认 model_info_target.yaml）
+EXPORT_YAML=model_info_instruct.yaml OUT_SUBDIR=output_instruct_embedding_out_no_output_pos \
+  bash 03_onnx_export/export.sh                        # instruct（pipeline.sh 自动传）
 ```
 
 ## 阶段 ④ OMC 转换（~2 分钟）
 ```bash
-bash 04_omc_convert/convert.sh            # 日志: OMG generate offline model success
+bash 04_omc_convert/convert.sh                         # base（默认前缀 Qwen25_1b5_Base_kirin9020）
+QUANT_DIR=$PWD/02_quant/qwen25_1b5_instruct_9020 \
+ONNX_DIR=$PWD/03_onnx_export/output_instruct_embedding_out_no_output_pos \
+OUTPUT_PREFIX=./Qwen25_1b5_Instruct_kirin9020 \
+  bash 04_omc_convert/convert.sh                       # instruct（pipeline.sh 自动传）
 ```
 
 ## 阶段 ⑤ 端侧 7 文件
 ```bash
-bash 05_device_files/pack.sh
+bash 05_device_files_base/pack.sh                      # base（默认参数）
+bash pipeline.sh instruct pack                          # instruct（自动传参复用同一 pack.sh）
 ```
 
 **手机实机部署（路线 B / HarmonyOS NEXT，已在 Kirin9020 真机验证通过）**：
@@ -102,10 +128,11 @@ bash 05_device_files/pack.sh
 1. `executor.json` / `context_next.json` 已改为 App 沙箱路径（`/data/storage/el2/base/haps/entry/files/`），
    注意三点：`model_path`/`weight_path` 用沙箱绝对路径；`tokenizer.path` 必须绝对路径；
    `embedding_weights`/`embedding_dequant_scale` 必须保持相对文件名（引擎自动拼 weight_path 前缀）。
-2. 在连手机的 Windows 机器上运行 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，
-   脚本会自动核验。详细步骤与排错见 `05_device_files/NEXT_端侧测试手册.md`。
-3. 从本服务器拷贝 `SubGraph_0.weight` 后**务必核对大小 = 1272421888 字节**
-   （曾发生传输截断少 6.2MB 导致 `LoadPrivateWeight` 失败）。
+2. 在连手机的 Windows 机器上运行交付目录里的 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，
+   脚本自动识别目录里的 Base/Instruct 文件名并核验。详细步骤与排错见 `05_device_files_base/NEXT_端侧测试手册.md`。
+3. 从本服务器拷贝 `SubGraph_0.weight` 后**务必核对大小**（base g128 = 1272421888 字节；instruct g64 见 pack 输出，
+   曾发生传输截断少 6.2MB 导致 `LoadPrivateWeight` 失败）。
+4. **换模型演示**：进另一个交付目录重跑 push 脚本（7 文件整组覆盖），完全退出并重启 App。
 
 旧的路线 A（`/data/local/tmp/qwen25_1b5/` + Demo 工程）仅作备用。
 
@@ -120,9 +147,9 @@ bash 05_device_files/pack.sh
 | ②.3 | `weight quant done!!!` | trained_quant_weight.pth ~6.0G |
 | ②.4 | `quant done !!!` | trained.pth ~6.0G |
 | ②.5 | `quant params file build done` | **quant_params_file：g128≈556M / g64≈1.1G**（690M 说明 quant_param_2 配错）+ fake_quant_weight.pth ~6.7G + embedding 223M/594K |
-| ③ | `generating finished` | model.onnx 439K + model.pb ~5.9G + model_64_2048.embedding_* |
-| ④ | `generate offline model success`，日志 **s16s4 融合数千次（g128 交付版 3136 / g64 版 4704）**、don't support=0 | **omc ~3.7M + SubGraph_0.weight：g128 1.27G / g64 1.35G** |
-| ⑤ | 7 文件齐全 | 总 ~1.5G |
+| ③ | `generating finished` | model.onnx 439K + model.pb ~5.9G + model_64_2048.embedding_*（pack 时改名 model_{base,instruct}_*） |
+| ④ | `generate offline model success`，日志 **s16s4 融合数千次（g128 3136 / g64 4704）**、don't support=0 | **omc ~3.7M + SubGraph_0.weight：g128 1.27G / g64 1.35G** |
+| ⑤ | 7 文件齐全（omc/embedding 文件名带 `_Base_`/`_Instruct_` 标记） | 总 ~1.5G（g64 版 ~1.6G） |
 
 ## 常见问题（详见 QUANTIZATION.md 四）
 

@@ -102,7 +102,15 @@ Windows 直接双击:
 
 - `CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp`:InitParam 笔误修正 + 日志格式修正
 - `CANNLLMEngineDemoNext/entry/src/main/cpp/include/`、`lib64/`:新增 SDK(来自 CANN-Kit-next-6.0.1.0.zip)
-- `05_device_files/context_next.json`:新增(NEXT 沙箱路径版 context)
+- `05_device_files/context_next.json`:NEXT 版 context(2026-08-17 **内容修正**):
+  - **正确内容 = `generate_options` + `sampler`**(与 context.json 相同,context 里没有路径,无需"沙箱路径版")
+  - 之前误放成 executor 式内容(llm_config/tokenizer/autoregressive),导致 `generate_options`/`sampler` 全部缺失,
+    引擎走默认值:**max_gen_tokens 默认 64(输出被截断到 64 token)+ 采样参数丢失(与云侧 seed99/topk16/topp0.95/temp0.6/rep1.2 对不上)**
+  - `stop_sequence` 补上 `"<|endoftext|>"`:base 模型不会产出 `<|im_end|>`(那是 instruct 的对话结束符),
+    只配 `<|im_end|>` 时生成永不停止、每次都跑满 max_gen_tokens,且 `<|endoftext|>` 会以字面文本混入输出
+- `llm_demo.cpp`(2026-08-17):修复流式回调 UTF-8 半字符乱码(native 侧残留缓冲)+ strdup/delete[] 错配;
+  新增自动化测试钩子:沙箱存在 `test_prompt.txt` 时优先用作 prompt(uitest 无法注入中文),
+  完整回复落盘 `last_reply.txt` 供 hdc 拉取对比。**注意:测试完删除 test_prompt.txt,否则手动输入会被劫持**
 - `05_device_files/executor.json` + `context_next.json`(2026-08-17 修正):
   - `autoregressive.model_path` / `weight_path` 改为沙箱绝对路径(原 `/data/local/tmp/qwen25_1b5` 是路线 A 调试路径,App 无权读取,会报 `FileUtil::realpath: ERR` / `model config path error`)
   - `tokenizer.path` 必须为**绝对路径**(相对路径 realpath 直接失败)

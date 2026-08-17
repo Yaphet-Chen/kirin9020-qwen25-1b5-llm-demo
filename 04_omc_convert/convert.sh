@@ -3,7 +3,8 @@
 # 用法: bash 04_omc_convert/convert.sh
 # 前置: 阶段②quant_params_file + 阶段③model.onnx/model.pb
 # 关键发现: DDK 自带 omg 所需的全部算子库，不需要额外安装 CANN toolkit
-# 路径可用环境变量覆盖: QUANT_DIR / ONNX_DIR（默认 qwen25_1b5_9020（run.sh 默认 testcase））
+# 路径可用环境变量覆盖: QUANT_DIR / ONNX_DIR / OUTPUT_PREFIX
+#（instruct 产线由 pipeline.sh 自动传 Qwen25_1b5_Instruct_kirin9020 等值）
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/04_omc_convert"
@@ -12,7 +13,7 @@ DDK="$ROOT/01_prepare/tools"
 QUANT_DIR="${QUANT_DIR:-$ROOT/02_quant/qwen25_1b5_9020}"          # 量化工程（含 train_output/quant_params_file）
 ONNX_DIR="${ONNX_DIR:-$ROOT/03_onnx_export/output_embedding_out_no_output_pos}"
 QUANT_PARAMS="$QUANT_DIR/train_output/quant_params_file"
-OUTPUT_PREFIX="./Qwen25_1b5_kirin9020"
+OUTPUT_PREFIX="${OUTPUT_PREFIX:-./Qwen25_1b5_kirin9020}"
 
 # 准备输入（先检查，缺产物时给出明确提示，避免现场对着 omg 报错排查）
 for f in "$ONNX_DIR/model.onnx" "$ONNX_DIR/model.pb" "$QUANT_PARAMS"; do

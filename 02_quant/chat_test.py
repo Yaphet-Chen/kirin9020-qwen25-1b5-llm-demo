@@ -37,7 +37,7 @@ def generate(model, tokenizer, prompt, max_new_tokens=128):
 
 def main():
     mp, cfg, ckpt = sys.argv[1], sys.argv[2], sys.argv[3]
-    device = "cuda"
+    device = os.environ.get("CHAT_DEVICE", "cuda")   # GPU 被占时可 CHAT_DEVICE=cpu 走 CPU
     tok = AutoTokenizer.from_pretrained(mp)
 
     print("加载浮点模型...", flush=True)

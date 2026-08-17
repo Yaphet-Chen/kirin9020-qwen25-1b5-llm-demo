@@ -1,8 +1,9 @@
-# Qwen2.5-1.5B / kirin9020 int4 量化完全指南（实跑验证版）
+# Qwen2.5-1.5B（base + instruct）/ kirin9020 int4 量化完全指南（实跑验证版）
 
 > 本文回答一个问题：**到底要怎么量化，结果才是最优的。**
 > 所有结论均来自本机（RTX 5090, torch 2.8.0+cu128）GPU 实跑 + wikitext2 PPL 评测 + 续写生成质量对比 + omg 实际转换验证。
-> 浮点基线 PPL = 17.49；英文最优量化 **19.66（g64+wiki 校准，劣化 12.44%）**；**当前交付版 = g128 + 中文校准**（中文 PPL 14.76 / 劣化 17.1%，英文 24.42，取舍见 §三 2×2 矩阵）。
+> 浮点基线 PPL = 17.49；英文最优量化 **19.66（g64+wiki 校准，劣化 12.44%）**；**base 交付版 = g128 + 中文校准**（中文 PPL 14.76 / 劣化 17.1%，英文 24.42，取舍见 §三 2×2 矩阵）。
+> **instruct 交付版（§八）= Qwen2.5-1.5B-Instruct + g64 + 中文对话校准：chat 域劣化仅 +9.0%，greedy 对话零退化**；统一产线入口 `pipeline.sh <base|instruct>`。
 > 操作步骤见 REPRODUCE.md；本文是配方、机制（含算法数学原理）、实验与结论。机制部分证据分 [实证]（逆向 so 符号 / 产物文件实测）与 [推断]。
 > **全文数学符号统一**（详见 §2.5 对照表）：`s_w` 权重 scale、`α` quant_alpha、`s_a` 激活 scale、`s_e` embedding scale、`γ` norm 增益。
 
@@ -503,13 +504,90 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
 
 | 方案 | PPL（测试口径） | SubGraph_0.weight | 量化总耗时 |
 |---|---|---|---|
-| **交付版** g128+zh校准+lmfp+c512 | 中文 **14.76**（+17.1%）/ 英文 24.42（+39.6%） | **1.27G** | ~33 min |
+| **base 交付版** g128+zh校准+lmfp+c512 | 中文 **14.76**（+17.1%）/ 英文 24.42（+39.6%） | **1.27G** | ~33 min |
+| **instruct 交付版** g64+zh对话校准+lmfp+c512 | chat 域 **13.76**（+9.0%）/ FP 12.62 | **1.3G** | ~41 min |
 | 英文最优 g64+wiki校准+lmfp+c512 | 英文 **19.66**（+12.4%）/ 中文 15.87（+25.9%） | 1.35G | ~33 min |
 | 基线 g128+wiki+lm量化+c128 | 英文 22.31（+27.5%） | 894M | ~15 min |
 | 快速验证 s16/c128 | ~21.3（估） | 同基线 | ~3 min |
 
 ## 七、遗留项
 - **c1024**：GPU 被其他用户进程占用（14.5G）连续 OOM 未测成。空闲时补测：`CUTOFF=1024 bash 02_quant/run_experiment.sh cl1024 64 1024 false 1 --keep-lm-head-fp`，或有再 −0.1~0.2 空间。
-- **端侧对话**：若目标是对话 demo，建议换 Qwen2.5-1.5B-**Instruct** 量化（流程完全复用，vocab 一致 151936）。
-- **手机 NPU 实测**：omc 已产出但尚未上机验证对话（GPU 仿真已验证生成质量）。
+- ~~**端侧对话**~~：**已完成**——见 §八 instruct 产线（Qwen2.5-1.5B-Instruct，g64+对话域校准，统一入口 `pipeline.sh`）。
+- **手机 NPU 实测**：base omc 已上机验证；instruct omc 已产出（s16s4=4704），待上机。
 - **闭源不可见项**：Quant_act_weight_eco 的 "eco" 具体接线、svd_quant（SvdQuantizer，带 LUT）启用场景、`α` 与 `s_w` 的合成公式、`find_params` 是否做 MSE scale 搜索——均在闭源 so 内。
+
+---
+
+## 八、Instruct 产线：Qwen2.5-1.5B-Instruct / int4 g64 / 对话域校准（2026-08-17）
+
+> 目标：端侧**对话** demo（base 版只会续写，§四坑6）。**量化方案与校准数据都按 instruct 重新匹配**，
+> 公共结论复用 base 实验矩阵（§一/§三），差异只有三处：模型、group_size、校准语料域。
+> 统一入口：`bash pipeline.sh instruct`（base 版为 `bash pipeline.sh base`，两产线共用全部阶段脚本，
+> 差异声明在 `profiles/*.env`——演示时可先跑 base 再跑 instruct，互不覆盖）。
+
+### 8.1 配方（与 base 的差异加粗）
+
+| 配置项 | instruct 值 | base 交付版值 | 说明 |
+|---|---|---|---|
+| 模型 | Qwen2.5-1.5B-**Instruct** | Qwen2.5-1.5B | 同架构同 vocab(151936)，tokenizer.json 三段实测完全一致，设备侧可互换 |
+| group_size | **64** | 128 | 精度优先（用户指定）：~1 PPL 换体积 +82M（SubGraph 1.27→1.3G） |
+| 校准语料 | **zh 对话（ChatML 渲染）** | zh 维基 | **校准分布=部署分布**（见 8.2），域效应同 §三 2×2 的逻辑 |
+| weight/input bit、lm_head、样本数、cutoff、PTQ、quant_param_2 | 4/16、fp、1024、512、KD off、False | 同 | base 实验矩阵的最优公共项，原样继承 |
+
+### 8.2 校准语料构建（`02_quant/data_chat/build_corpus_chat.py`，可复现）
+
+- **来源**（HF 流式）：`BelleGroup/multiturn_chat_0.8M`（解析 instruction 内嵌的 Human:/Assistant: 标记为真多轮 turns，保留 ≥2 问）+ `BelleGroup/train_0.5M_CN`（单轮指令），按对话数 2:1 交错。
+- **渲染**：用 **Instruct 模型自带的 chat template**（ChatML，带默认 system "You are Qwen..."）把每条对话渲染成文本——与端侧 App 侧 `apply_chat_template` 后喂引擎的 token 流一致。这正是"匹配对应的校准数据集"的含义：GPTQ 的 Hessian 与 EMA 的 `s_a` 统计什么分布，什么分布就受保护（§三域效应）。
+- **格式约束沿用 data_zh 的坑**：`dataset_chat_zh.json` 为 `[{"text":...}]` 行式 json，**行数 ≥ num_samples**（实测 2401 行）；每行打包若干条**完整**对话至 ~480 token（不跨行拆对话）；stage1 拼接全文（总量 856k token > GPTQ 需要的 524k），stage2 按行索引前 1024 行。
+- **留出集**：120 条对话渲染为 `test_chat_zh.txt`（70k 字符），`eval_ppl.py --data` 用，不参与校准。
+- 实测构成：多轮 2705 / 单轮 1005 条对话；行宽 min/avg/max = 166/360/640 token（>512 的行被 cutoff 截断，尾部损失可忽略）。
+
+### 8.3 精度：chat 域 PPL（fp32 仿真，8160 token）
+
+| 口径 | FP | QUANT | 劣化 |
+|---|---|---|---|
+| instruct g64 + zh对话校准（本产线） | 12.62 | 13.76 | **+9.02%** |
+| （参照）base g128 + zh维基校准，zh维基测试 | — | — | +17.1% |
+| （参照）base g64 + wiki校准，wiki英文测试 | 17.49 | 19.66 | +12.4% |
+
+注意跨模型/跨测试集的 PPL 绝对值不可直接比较（instruct 在对话域天然 PPL 更低），但**相对劣化**可比：
+instruct 产线拿到全部交付版中最低的 +9.0%——g64（−1 PPL 级收益）与对话域校准（域对齐收益）叠加的结果。
+
+### 8.4 端侧配置差异（05_device_files_instruct）
+
+- `context.json` 采样参数换为 **Qwen2.5-Instruct 官方推荐值**（generation_config.json）：T=0.7 / top-p=0.8 / top-k=20 / repetition_penalty=1.1（base 版的 T0.6/k16/p0.95/rep1.2 是为 base 抗复读特调，instruct 不需要那么激进）；seed=99 保留（演示可复现）。
+- `executor.json`：eos_token_id=**151645**（`<|im_end|>`，base 为 151643）；model_path/embedding 名带 `_Instruct_` 标记。
+- 生成停止：引擎 stop_sequence 已含 `<|im_end|>`，与 eos 双保险。
+- **App 侧发 prompt 必须套 chat template**（引擎不模板化）：`<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n`。
+
+### 8.5 产物与验证清单（实测，对照 REPRODUCE.md §验证清单）
+
+| 项 | 实测 | g64 预期 |
+|---|---|---|
+| quant_params_file | 1.1G | ✅（556M 为 g128 口径，690M 为 quant_param_2 配错） |
+| fake_quant_weight.pth | 6.7G | ✅ |
+| omg s16s4 字符串计数 | **4704** / don't support=0 | ✅（g64 口径；g128=3136。注意按字符串出现次数统计，按行数统计会得到 3136/其他值） |
+| SubGraph_0.weight | **1303977472 字节（1.3G）** | ✅ 传输后按此字节数核对（对照 base g128=1272421888） |
+| omc | 3.7M | ✅ |
+| 交付目录 | 05_device_files_instruct/（7 文件+脚本） | 命名：`Qwen25_1b5_Instruct_kirin9020.omc`、`model_instruct_64_2048.embedding_*` |
+
+### 8.6 生成质量（chat_test.py，greedy，chat template，128 token；完整输出 logs/chat_instruct.log）
+
+| 问题 | FP | QUANT(g64) | 评注 |
+|---|---|---|---|
+| 自我介绍 | 流畅得体 | 流畅得体（措辞不同） | 同档 |
+| 长城历史（三句话） | 准确（秦汉明） | 准确（"多个朝代"表述） | **base 版量化曾把长城说成运河；instruct 版量化无此史实错误** |
+| 25×37 逐步算 | 175+750=**925** 全对 | 分步正确（175；25×30 拆解），128 token 截断未到最终和（FP 亦被截断） | 同档 |
+| Python 质数函数 | 正确实现 | 正确实现且带完整 docstring | 同档 |
+
+- 全部 4 问：**零循环、零复读、零乱码**，与 FP 同质量档——instruct 模型 + g64 + 对话域校准下，
+  greedy（0/1 刀锋，§5.3 对量化误差最不利的解码方式）已无可用性退化；端侧还叠加采样阻尼，观感只会更好。
+- 对比 base 版结论（§三生成质量）：base 量化在 greedy 下中文有复读/史实混淆，需靠端侧采样参数恢复；
+  instruct 版天然对 chat 格式对齐，量化后 greedy 即可用——这是"换对模型"比"调参救模型"的根本差异。
+
+### 8.7 工程注意（本产线新增踩坑）
+
+1. **venv 的 activate 不可用**：本 venv 从别处移入，`bin/activate` 硬编码旧 `VIRTUAL_ENV=/home/chenyipei/test_omc/venv`，source 后 PATH 指向不存在目录 → `python: command not found`。所有脚本一律用 `venv/bin/python` 绝对路径（export.sh 已改）。
+2. **评测环境的 deepspeed 检查**：直接跑 eval_ppl.py 需 `CUDA_HOME=01_prepare/cuda_stub` + PYTHONPATH 带 dopt/_autopatch（pipeline.sh 已内置；run.sh 一直有）。
+3. **GPU 被占时评测走 CPU**：`EVAL_DEVICE=cpu bash pipeline.sh instruct eval`（fp32 CPU 慢但数值等价；chat_test 由 CHAT_DEVICE 接管）。
+4. **c512 量化的显存下限**：外部占用 ~14.7G（剩 ~14.7G 空闲）时 GPTQ c512/s1024 可跑通（本次实测）。

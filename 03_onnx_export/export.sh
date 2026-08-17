@@ -16,20 +16,22 @@ if [ ! -d npu_tuned_export ]; then
 fi
 
 # 2. 用绝对路径填充 yaml（占位符 __ROOT__ → 实际 ROOT）
-yaml="model_info_target.yaml"
-sed "s|__ROOT__|$ROOT|g" "$yaml" > npu_tuned_export/model_info_target.yaml
+#    EXPORT_YAML 可换配置（instruct 版用 model_info_instruct.yaml，pipeline.sh 自动传）
+yaml="${EXPORT_YAML:-model_info_target.yaml}"
+sed "s|__ROOT__|$ROOT|g" "$yaml" > "npu_tuned_export/${yaml}"
 
-# 3. 执行导出
-source "$VENV/bin/activate"
+# 3. 执行导出（直接用 venv 的 python——本 venv 是从别处移入的，activate 内硬编码了
+#    旧 VIRTUAL_ENV 路径，source 后 PATH 反而指向不存在的目录）
 export CUDA_HOME="$ROOT/01_prepare/cuda_stub"
 export PYTHONPATH="$DOPT:${PYTHONPATH:-}"
-mkdir -p dump output
+mkdir -p dump output output_instruct
 
 cd npu_tuned_export
-python export_model_single_qwen2.py model_info_target.yaml 2>&1 | tee "$ROOT/logs/export.log"
+"$VENV/bin/python" export_model_single_qwen2.py "$yaml" 2>&1 | tee "$ROOT/logs/export.log"
 
-# 4. 把产物拷到 03_onnx_export/output（导出脚本会生成 output_embedding_out_no_output_pos）
-OUTDIR="$ROOT/03_onnx_export/output_embedding_out_no_output_pos"
+# 4. 产物目录（导出脚本按 yaml 的 output_dir 加后缀生成 *_embedding_out_no_output_pos）
+#    OUT_SUBDIR 可覆盖（instruct 版为 output_instruct_embedding_out_no_output_pos，pipeline.sh 自动传）
+OUTDIR="$ROOT/03_onnx_export/${OUT_SUBDIR:-output_embedding_out_no_output_pos}"
 echo ""
 echo "✅ 阶段③完成。产物目录: $OUTDIR"
 ls -lah "$OUTDIR"/*.onnx "$OUTDIR"/*.pb 2>/dev/null
