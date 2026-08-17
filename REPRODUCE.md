@@ -128,7 +128,7 @@ bash pipeline.sh instruct pack                          # instruct（自动传�
 
 **手机实机部署（路线 B / HarmonyOS NEXT，已在 Kirin9020 真机验证通过）**：
 
-1. `executor.json` / `context_next.json` 已改为 App 沙箱路径（`/data/storage/el2/base/haps/entry/files/`），
+1. `executor.json` / `context.json` 已改为 App 沙箱路径（`/data/storage/el2/base/haps/entry/files/`），
    注意三点：`model_path`/`weight_path` 用沙箱绝对路径；`tokenizer.path` 必须绝对路径；
    `embedding_weights`/`embedding_dequant_scale` 必须保持相对文件名（引擎自动拼 weight_path 前缀）。
 2. 在连手机的 Windows 机器上运行交付目录里的 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，

@@ -81,7 +81,7 @@ if [ -z "$("$HDC" shell "ls -d ${REAL_DIR}" 2>&1 || true)" ]; then
     exit 1
 fi
 
-# 7 文件: 本地文件 -> 设备文件名(context_next.json 以 context.json 名义写入设备;
+# 7 文件: 本地文件 -> 设备文件名(context.json 原名写入设备;
 #         embedding 按识别到的 Base/Instruct 文件名原样推)
 push_one() {
     local local_file="$1" remote_name="$2" out=""
@@ -99,7 +99,7 @@ push_one "${SRC}/SubGraph_0.weight"  "SubGraph_0.weight"
 push_one "${SRC}/${EMB_W}"      "${EMB_W}"
 push_one "${SRC}/${EMB_S}"      "${EMB_S}"
 push_one "${SRC}/tokenizer.json"      "tokenizer.json"
-push_one "${SRC}/context_next.json"   "context.json"
+push_one "${SRC}/context.json"        "context.json"
 push_one "${SRC}/executor.json"       "executor.json"
 
 # hdc 传入文件权限可能不带其他用户读权限, 统一放开

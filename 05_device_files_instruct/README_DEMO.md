@@ -9,7 +9,7 @@
 | `SubGraph_0.weight` | 外置权重（omg 固定名，与 base 同名——换模型必须整组 7 文件重推） |
 | `model_instruct_64_2048.embedding_weights/.embedding_dequant_scale` | 分离 embedding（int8 表 + 逐行 scale） |
 | `tokenizer.json` | 词表（与 base 同 vocab 151936，取自 Instruct 模型目录） |
-| `context.json` / `context_next.json` | 采样配置：**对话参数**（T=0.7 / top-p=0.8 / top-k=20 / rep=1.1，官方推荐值；base 版为抗复读参数 T=0.6/k16/p0.95/rep1.2） |
+| `context.json` | 采样配置：**对话参数**（T=0.7 / top-p=0.8 / top-k=20 / rep=1.1，官方推荐值；base 版为抗复读参数 T=0.6/k16/p0.95/rep1.2） |
 | `executor.json` | 引擎配置（model_path 指向 `Qwen25_1b5_Instruct_kirin9020.omc`，eos=151645 `<|im_end|>`） |
 
 ## 演示流程（base → instruct）

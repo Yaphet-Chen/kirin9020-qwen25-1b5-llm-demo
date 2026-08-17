@@ -90,7 +90,7 @@ call :push "SubGraph_0.weight"               "SubGraph_0.weight"
 call :push "!EMB_W!"                         "!EMB_W!"
 call :push "!EMB_S!"                         "!EMB_S!"
 call :push "tokenizer.json"                  "tokenizer.json"
-call :push "context_next.json"               "context.json"
+call :push "context.json"                  "context.json"
 call :push "executor.json"                   "executor.json"
 if defined PUSH_FAILED goto :fail
 
