@@ -55,18 +55,19 @@ do_quant() {
         echo "跳过量化（${PIPE_TESTCASE}/train_output/quant_params_file 已存在；重跑用 FORCE=1）"
         return
     fi
+    export TESTCASE="$PIPE_TESTCASE" CFG="$PIPE_CFG" MODEL="$MODEL_DIR"   # run.sh 三件套，一次导出
     if [ ! -f "./${PIPE_TESTCASE}/dopt_config.json" ]; then
         STEP "stage1 第一次：生成 dopt_config.json"
-        TESTCASE="$PIPE_TESTCASE" CFG="$PIPE_CFG" MODEL="$MODEL_DIR" bash run.sh stage1 2>&1 | tail -2
+        bash run.sh stage1 2>&1 | tail -2
     fi
     STEP "编辑量化策略: int4 per-group ${PIPE_GROUP} + lm_head 保 fp + eco"
     "$PY" edit_dopt_config.py "./${PIPE_TESTCASE}/dopt_config.json" "$PIPE_GROUP" $PIPE_EDIT_FLAGS
     STEP "stage1 权重量化 GPTQ (~19min)"
-    TESTCASE="$PIPE_TESTCASE" CFG="$PIPE_CFG" MODEL="$MODEL_DIR" bash run.sh stage1 2>&1 | tail -2
+    bash run.sh stage1 2>&1 | tail -2
     STEP "stage2 激活校准 EMA (~10min)"
-    TESTCASE="$PIPE_TESTCASE" CFG="$PIPE_CFG" MODEL="$MODEL_DIR" bash run.sh stage2 2>&1 | tail -2
+    bash run.sh stage2 2>&1 | tail -2
     STEP "stage3 参数提取 (~4min)"
-    TESTCASE="$PIPE_TESTCASE" CFG="$PIPE_CFG" MODEL="$MODEL_DIR" bash run.sh stage3 2>&1 | tail -2
+    bash run.sh stage3 2>&1 | tail -2
     ls -lah "./${PIPE_TESTCASE}/train_output/" | grep -E 'trained|quant_params|fake' || true
 }
 

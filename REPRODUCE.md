@@ -24,7 +24,7 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 
 1. **GPU**：`nvidia-smi` 确认空闲。撰写本文时有 14.5G 常驻 python + 1.9G lmstudio 占卡（此前 c1024 实验 OOM 的元凶），跑阶段②前需协调释放。c512 档在 ~14G 空闲下实测可跑（instruct 产线 2026-08-17 验证）。
 2. 磁盘 ≥40G 余量（6G×2 pth + 6.7G fake_quant + 5.9G pb 峰值叠加）。
-3. 演示 stage1 首跑（生成配置步骤）前先 `rm -rf 02_quant/qwen25_1b5_9020`——**dopt_config.json 已存在时，第一次 `run.sh stage1` 不生成配置而直接进入 19 分钟重量化**。不想重跑量化则从 stage3 开始（trained.pth 已在）。`pipeline.sh` 已内置该防呆（未完成的 testcase 自动清除重跑）。
+3. **防误重量化**：dopt 工程目录里 `dopt_config.json` 已存在时，第一次 `run.sh stage1` 不会重新生成配置而是直接进入 19 分钟重量化——手动重跑生成配置步骤前先删对应 testcase 目录；不想重跑量化则从 stage3 开始（trained.pth 已在）。`pipeline.sh` 已内置该防呆（未完成的 testcase 自动清除重跑），`run.sh` 裸跑也强制要求显式 `TESTCASE=`。
 4. `04_omc_convert/` 的 `model.onnx/.pb/quant_params_file` 是转换工作副本，转换后可删（2026-08-17 已清理，
    含历史多档实验失败残留 model128.*/omg_*.log——档位锁定教训见 QUANTIZATION.md §三）。
 
@@ -80,6 +80,8 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 ## 阶段 ② 量化（三段式，GPU，~35 分钟）
 
 > **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
+> 校准语料重建（可跳过，若 `data_zh/dataset_zh.json` / `data_chat/dataset_chat_zh.json` 已在）：
+> `python 02_quant/data_zh/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
 > 手动方式（以 base 为例；instruct 把 testcase/config/model 换成 instruct 版，或看 pipeline.sh do_quant）：
 
 ```bash

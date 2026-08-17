@@ -15,8 +15,10 @@ FP 用 bf16(本机健康路径), 量化仿真用 fp32(dopt 量化算子在 fp16 
   python device_compare.py --emb --greedy --n 600   # 量化仿真改用端侧同款 int8 embedding(跳过 FP 侧)
   python device_compare.py --emb --probe            # 探针: embedding 置零, 验证其真在前向路径上
   python device_compare.py \
-      --config qwen25_1b5_9020/dopt_config.json \
-      --ckpt   qwen25_1b5_9020/train_output/trained.pth   # 换 g64+wiki 校准版对比
+      --config qwen25_1b5_instruct_9020/dopt_config.json \
+      --ckpt   qwen25_1b5_instruct_9020/train_output/trained.pth   # 换 instruct(g64+对话校准)对比
+  DC_MODEL=.../Qwen2.5-1.5B-Instruct DC_TOP_K=20 DC_TOP_P=0.8 DC_TEMP=0.7 DC_REP=1.1 python device_compare.py \
+      --config qwen25_1b5_instruct_9020/...               # instruct 模型+其官方采样参数
 可复现性: 同机同 torch 版本下, 量化侧(fp32)输出与 logs/g128zh_device_compare.log 逐字一致。
 """
 import os, sys, argparse, pathlib

@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/04_omc_convert"
 
 DDK="$ROOT/01_prepare/tools"
-QUANT_DIR="${QUANT_DIR:-$ROOT/02_quant/qwen25_1b5_9020}"          # 量化工程（含 train_output/quant_params_file）
+QUANT_DIR="${QUANT_DIR:-$ROOT/02_quant/exp_g128_zh}"             # 量化工程（含 train_output/quant_params_file）
 ONNX_DIR="${ONNX_DIR:-$ROOT/03_onnx_export/output_embedding_out_no_output_pos}"
 QUANT_PARAMS="$QUANT_DIR/train_output/quant_params_file"
 OUTPUT_PREFIX="${OUTPUT_PREFIX:-./Qwen25_1b5_kirin9020}"
