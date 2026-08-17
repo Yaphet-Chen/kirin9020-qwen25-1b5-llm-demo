@@ -2,7 +2,7 @@
 """
 端侧部署配置下的 FP vs 量化模型续写/对话对比（严格复刻 context.json）。
 
-采样协议 = 05_device_files/context.json 逐项:
+采样协议 = 05_device_files_base/context.json 逐项:
   seed=99(每个 prompt 前重置, FP/QUANT 消耗完全相同的随机数)
   repetition_penalty=1.2(logits 除法) -> temperature=0.6 -> top-k=16 -> top-p=0.95(核采样)
 FP 用 bf16(本机健康路径), 量化仿真用 fp32(dopt 量化算子在 fp16 下溢出 nan)。
@@ -11,6 +11,9 @@ FP 用 bf16(本机健康路径), 量化仿真用 fp32(dopt 量化算子在 fp16 
   python device_compare.py                          # 默认: g128+中文校准版, 内置续写 prompt
   python device_compare.py --n 60                   # 短输出快速验证
   python device_compare.py --chat                   # 追加 chat-template 对话测试(base 模型仅看退化程度)
+  python device_compare.py --greedy --n 600         # 贪心(对齐端侧 do_sample=false), 验证端云数值一致性
+  python device_compare.py --emb --greedy --n 600   # 量化仿真改用端侧同款 int8 embedding(跳过 FP 侧)
+  python device_compare.py --emb --probe            # 探针: embedding 置零, 验证其真在前向路径上
   python device_compare.py \
       --config qwen25_1b5_9020/dopt_config.json \
       --ckpt   qwen25_1b5_9020/train_output/trained.pth   # 换 g64+wiki 校准版对比
@@ -27,8 +30,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 DEV = "cuda"
 MODEL = ROOT / "01_prepare" / "models" / "Qwen2.5-1.5B"
+VOCAB, HIDDEN = 151936, 1536
 # 端侧 context.json 参数（改这里保持与部署一致）
-SEED, TOP_K, TOP_P, TEMP, REP = 99, 16, 0.95, 0.6, 1.2
+import os as _os
+SEED, TOP_K, TOP_P, TEMP, REP = 99, 16, 0.95, 0.6, float(_os.environ.get("DC_REP", "1.2"))
 
 CONT_PROMPTS = [
     "长城是中国古代的伟大工程，", "秋天到了，", "人工智能的发展，",
@@ -37,12 +42,33 @@ CONT_PROMPTS = [
 CHAT_PROMPTS = ["你好，请介绍一下你自己。", "请用中文解释什么是模型量化。"]
 
 
-def load_quant(cfg, ckpt):
+def load_device_embedding(emb_dir, stem):
+    """读端侧 int8 embedding 两文件并反量化为 fp32 表（[151936,1536] 行缩放）。"""
+    import numpy as np
+    d = pathlib.Path(emb_dir)
+    w = np.fromfile(d / f"{stem}.embedding_weights", dtype=np.int8)
+    s = np.fromfile(d / f"{stem}.embedding_dequant_scale", dtype=np.float32)
+    assert w.size == VOCAB * HIDDEN, f"embedding_weights 元素数 {w.size} != {VOCAB*HIDDEN}"
+    assert s.size == VOCAB, f"dequant_scale 元素数 {s.size} != {VOCAB}"
+    return torch.from_numpy(w.reshape(VOCAB, HIDDEN).astype(np.float32) * s[:, None])
+
+
+def load_quant(cfg, ckpt, emb=None):
+    """量化仿真模型。emb 不为空时改用端侧同款 int8 embedding——必须在两个时机替换
+    （首版教训：只事后替换无效，optimize_model 会接管/复制模块权重）：
+      ① optimize_model 之前 → dopt 接管的就是替换后的权重；
+      ② load_state_dict 之后 → 防 ckpt 把 embedding 覆盖回原始值。"""
     from dopt.dopt_lm.do_opt import optimize_model, set_quant_state
     from dopt.dopt_lm.train import set_calibrate_state
     base = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float32, device_map=DEV)
+    if emb is not None:
+        with torch.no_grad():
+            base.model.embed_tokens.weight.copy_(emb.to(base.model.embed_tokens.weight.device))
     m = optimize_model(base, str(cfg))
     m.load_state_dict(torch.load(str(ckpt), map_location="cpu"), strict=True)
+    if emb is not None:
+        with torch.no_grad():
+            m.model.embed_tokens.weight.copy_(emb.to(m.model.embed_tokens.weight.device))
     set_quant_state(m, weight_state=True, input_state=True)
     set_calibrate_state(m, False)
     m.eval()
@@ -50,7 +76,7 @@ def load_quant(cfg, ckpt):
 
 
 @torch.no_grad()
-def gen(model, tok, prompt, n, chat=False):
+def gen(model, tok, prompt, n, chat=False, greedy=False):
     torch.manual_seed(SEED)                      # 每 prompt 重置 → 两侧同随机数
     if chat:
         msgs = [{"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
@@ -62,15 +88,18 @@ def gen(model, tok, prompt, n, chat=False):
         logits = model(ids).logits[0, -1].float()
         for t in set(toks):
             logits[t] /= REP                     # repetition penalty
-        logits = logits / TEMP                   # temperature
-        kth = torch.topk(logits, TOP_K).values[-1]   # top-k
-        logits[logits < kth] = -float("inf")
-        probs = torch.softmax(logits, dim=-1)
-        sp, si = probs.sort(descending=True)     # top-p 核采样
-        cum = torch.cumsum(sp, dim=-1)
-        keep = si[:(cum > TOP_P).nonzero()[0].item() + 1]
-        mask = torch.zeros_like(probs); mask[keep] = probs[keep]
-        nxt = torch.multinomial(mask / mask.sum(), 1).item()
+        if greedy:
+            nxt = logits.argmax().item()         # do_sample=false: 贪心,验证端云数值一致性用
+        else:
+            logits = logits / TEMP               # temperature
+            kth = torch.topk(logits, TOP_K).values[-1]   # top-k
+            logits[logits < kth] = -float("inf")
+            probs = torch.softmax(logits, dim=-1)
+            sp, si = probs.sort(descending=True)     # top-p 核采样
+            cum = torch.cumsum(sp, dim=-1)
+            keep = si[:(cum > TOP_P).nonzero()[0].item() + 1]
+            mask = torch.zeros_like(probs); mask[keep] = probs[keep]
+            nxt = torch.multinomial(mask / mask.sum(), 1).item()
         if nxt == eos:
             break
         toks.append(nxt)
@@ -78,11 +107,11 @@ def gen(model, tok, prompt, n, chat=False):
     return tok.decode(toks, skip_special_tokens=True)
 
 
-def run(model, tok, tag, n, chat):
+def run(model, tok, tag, n, chat, greedy=False):
     prompts = CONT_PROMPTS + (CHAT_PROMPTS if chat else [])
     for p in prompts:
         mode = "对话" if p in CHAT_PROMPTS and chat else "续写"
-        print(f"--- [{mode}] {p}\n{gen(model, tok, p, n, chat=(mode == '对话'))}\n", flush=True)
+        print(f"--- [{mode}] {p}\n{gen(model, tok, p, n, chat=(mode == '对话'), greedy=greedy)}\n", flush=True)
 
 
 def main():
@@ -91,19 +120,40 @@ def main():
     ap.add_argument("--ckpt", default="exp_g128_zh/train_output/trained.pth")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--chat", action="store_true")
+    ap.add_argument("--greedy", action="store_true", help="贪心解码(对应端侧 do_sample=false),仅用于端云数值一致性验证")
+    ap.add_argument("--emb", action="store_true",
+                    help="量化仿真加载端侧同款 int8 embedding(对齐端侧真实输入; 此模式跳过 FP 侧)")
+    ap.add_argument("--emb-dir", default=str(ROOT / "05_device_files_base"), help="embedding 两文件所在目录")
+    ap.add_argument("--emb-stem", default="model_base_64_2048", help="embedding 文件名主干")
+    ap.add_argument("--probe", action="store_true", help="探针: embedding 置零, 验证 embed_tokens 真在前向路径上(配 --emb)")
     a = ap.parse_args()
     cfg, ckpt = ROOT / "02_quant" / a.config, ROOT / "02_quant" / a.ckpt
     assert ckpt.exists(), f"缺 {ckpt}（先跑三段式量化, 见 REPRODUCE.md 阶段②）"
     tok = AutoTokenizer.from_pretrained(MODEL)
 
+    if a.emb:
+        emb = load_device_embedding(a.emb_dir, a.emb_stem)
+        print(f"device int8 embedding loaded: {tuple(emb.shape)} fp32(反量化)", flush=True)
+        qm = load_quant(cfg, ckpt, emb=emb)
+        if a.probe:
+            with torch.no_grad():
+                qm.model.embed_tokens.weight.zero_()
+            print("PROBE: embed_tokens 已置零, 若输出仍与正常相同则说明该模块不在前向路径上", flush=True)
+        with torch.no_grad():
+            diff = (qm.model.embed_tokens.weight.float().cpu() - emb).abs().max().item()
+        print(f"embed_tokens 与端侧 embedding 最大偏差: {diff} (应为 0 或接近 0)", flush=True)
+        print(f"\n=========== QUANT+端侧int8embedding (fp32) {a.config} ===========", flush=True)
+        run(qm, tok, "QUANT_EMB", a.n, a.chat, greedy=a.greedy)
+        return
+
     print(f"=========== FP (bf16) ===========", flush=True)
     fp = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.bfloat16, device_map=DEV); fp.eval()
-    run(fp, tok, "FP", a.n, a.chat)
+    run(fp, tok, "FP", a.n, a.chat, greedy=a.greedy)
     del fp; torch.cuda.empty_cache()
 
     print(f"\n=========== QUANT (fp32) {a.config} ===========", flush=True)
     qm = load_quant(cfg, ckpt)
-    run(qm, tok, "QUANT", a.n, a.chat)
+    run(qm, tok, "QUANT", a.n, a.chat, greedy=a.greedy)
 
 
 if __name__ == "__main__":

@@ -85,12 +85,12 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 ```bash
 source 01_prepare/venv/bin/activate
 cd 02_quant
-TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
+TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
 python edit_dopt_config.py exp_g128_zh/dopt_config.json 128 --keep-lm-head-fp
                                  # ②改策略：embed=MinMax, 196 linear=eco(g128,in16), lm_head=float
-TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
-TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
-TESTCASE=exp_g128_zh CFG=g128_zh_config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
+TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
+TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
+TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
 ```
 
 **（可选）验证精度与生成质量**
