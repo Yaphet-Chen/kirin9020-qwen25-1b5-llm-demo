@@ -526,7 +526,7 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
 | 快速验证 s16/c128 | ~21.3（估） | 同基线 | ~3 min |
 
 ## 七、遗留项
-- **c1024**：GPU 被其他用户进程占用（14.5G）连续 OOM 未测成。空闲时补测：`CUTOFF=1024 bash 02_quant/run_experiment.sh cl1024 64 1024 false 1 --keep-lm-head-fp`，或有再 −0.1~0.2 空间。
+- **c1024**：GPU 被其他用户进程占用（14.5G）连续 OOM 未测成。空闲时补测：按 REPRODUCE 阶段② 手动流程自建临时工程（复制 instruct_config.yaml 改 `cutoff_len: 1024`，TESTCASE/CFG/MODEL 指过去跑三段式），或有再 −0.1~0.2 空间。（历史实验矩阵驱动 run_experiment.sh 已删——与 pipeline.sh 职责重叠，见 git 历史。）
 - ~~**端侧对话**~~：**已完成**——见 §八 instruct 产线（Qwen2.5-1.5B-Instruct，g64+对话域校准，统一入口 `pipeline.sh`）。
 - **手机 NPU 实测**：base omc 已上机验证；instruct omc 已产出（s16s4=4704），待上机。
 - **闭源不可见项**：Quant_act_weight_eco 的 "eco" 具体接线、svd_quant（SvdQuantizer，带 LUT）启用场景、`α` 与 `s_w` 的合成公式、`find_params` 是否做 MSE scale 搜索——均在闭源 so 内。

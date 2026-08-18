@@ -46,7 +46,7 @@ qwen25_1b5_run/
 │   ├── instruct_config.yaml      #   instruct 配方（g64+zh对话校准）
 │   ├── data_zh_wiki/             #   base 校准语料（build_corpus.py + dataset.json + test.txt）
 │   ├── data_chat/                #   instruct 校准语料（build_corpus_chat.py + dataset.json + test.txt）
-│   ├── run.sh  edit_dopt_config.py  run_experiment.sh
+│   ├── run.sh  edit_dopt_config.py
 │   ├── eval_ppl.py  chat_compare.py  continuation_compare.py  quant_sim.py
 │   ├── reports/                  #   端云三方对比报告 report_{base,instruct}_3way_<口径>.md
 │   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）

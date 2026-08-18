@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/02_quant"
 
 # ===== 路径（默认 = instruct 产线，即实际部署形态；跑 base 显式传环境变量）=====
-# MODEL/TESTCASE/CFG 环境变量可换模型与试验工程（pipeline.sh 与 run_experiment.sh 都自动传；
+# MODEL/TESTCASE/CFG 环境变量可换模型与试验工程（pipeline.sh 自动传；
 # 手动裸跑必须显式给 TESTCASE，防止误指到交付工程触发 19 分钟重量化）
 qlibs="$ROOT/01_prepare/tools/tools_dopt/dopt_pytorch_py3"
 model_path="${MODEL:-$ROOT/01_prepare/models/Qwen2.5-1.5B-Instruct}"
