@@ -1,10 +1,9 @@
 # kirin9020 平台 Qwen2.5-1.5B（base + instruct 双产线）全流程复现指引（操作手册）
 
-> 本文只讲**怎么跑**。量化机制、为什么这样配、实验数据、踩坑记录见 **QUANTIZATION.md**；git 工作流见 **VERSION_CONTROL.md**。
+> 本文只讲**怎么跑**。量化机制、为什么这样配、实验数据、踩坑记录见 **QUANTIZATION.md**。
 > **两条产线、各自最优配方**（统一入口 `pipeline.sh`，详见下节）：
 > - **base 交付版 = Qwen2.5-1.5B + g128 + zh维基校准**（续写演示）：中文 PPL 14.76（劣化 17.1%），SubGraph 1.27G；
 > - **instruct 交付版 = Qwen2.5-1.5B-Instruct + g64 + zh对话校准**（ChatML，对话演示）：配方与评测见 QUANTIZATION.md §八。
-> - 历史口径：英文最优版 = g64 + wikitext2（英文 PPL 19.66，劣化 12.44%）。
 > `05_device_files_base/` 与 `05_device_files_instruct/` 中是两套成品（文件名带 `_Base_` / `_Instruct_` 标记）。
 
 ## 统一产线入口（演示推荐用法）
@@ -17,16 +16,8 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 ```
 
 - 同一套阶段脚本（02~05），差异全部收在 `profiles/{base,instruct}.env`：模型 / group_size / 校准语料 / 导出 yaml / 产物命名 / 交付目录。
-- **演示流程**：先 `bash pipeline.sh base` 再 `bash pipeline.sh instruct`，产物分别落在 `05_device_files_base/`、`05_device_files_instruct/`；两个目录各自拷到连手机的 Windows 机，分别跑各自的 `push_to_device_next.bat`（换模型必须整组 7 文件重推，`SubGraph_0.weight` 两模型同名）。
-- **命名约定**（base/instruct 一眼可区分）：omc `Qwen25_1b5_{Base,Instruct}_kirin9020.omc`；embedding `model_{base,instruct}_64_2048.embedding_*`；量化工程 `02_quant/{qwen25_1b5_base_9020,qwen25_1b5_instruct_9020}`。
+- **演示流程**：先 `bash pipeline.sh base` 再 `bash pipeline.sh instruct`，产物分别落在 `05_device_files_base/`、`05_device_files_instruct/`；两个目录各自拷到连手机的 Windows 机，分别跑各自的 `push_to_device_next.bat`。
 
-## 现场演示预检
-
-1. **GPU**：`nvidia-smi` 确认空闲。撰写本文时有 14.5G 常驻 python + 1.9G lmstudio 占卡（此前 c1024 实验 OOM 的元凶），跑阶段②前需协调释放。c512 档在 ~14G 空闲下实测可跑（instruct 产线 2026-08-17 验证）。
-2. 磁盘 ≥40G 余量（6G×2 pth + 6.7G fake_quant + 5.9G pb 峰值叠加）。
-3. **防误重量化**：dopt 工程目录里 `dopt_config.json` 已存在时，第一次 `run.sh stage1` 不会重新生成配置而是直接进入 19 分钟重量化——手动重跑生成配置步骤前先删对应 testcase 目录；不想重跑量化则从 stage3 开始（trained.pth 已在）。`pipeline.sh` 已内置该防呆（未完成的 testcase 自动清除重跑），`run.sh` 裸跑也强制要求显式 `TESTCASE=`。
-4. `04_omc_convert/` 的 `model.onnx/.pb/quant_params_file` 是转换工作副本，转换后可删（2026-08-17 已清理，
-   含历史多档实验失败残留 model128.*/omg_*.log——档位锁定教训见 QUANTIZATION.md §三）。
 
 ## 前置条件
 
@@ -34,14 +25,14 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 |---|---|
 | GPU | NVIDIA GPU；**sm_120(Blackwell/RTX 5090) 必须 torch 2.8+cu128**，sm_90 及以下可用 torch 2.4 |
 | 系统 | Linux x86_64，glibc ≥ 2.35，`uv`、`unzip` |
-| 依赖包 | `dependencies/DDK-tools-next-6.0.1.0.zip` + `kirin9020-plugin-next-6.0.1.0.zip`（仅此两个，无需 CANN toolkit） |
-| 源码 | 同仓库 `cannkit_samplecode_lm_engine_cpp/`（提供 npu_tuned_export 导出工程） |
+| 依赖包 | DDK 工具包 + kirin9020 平台插件包（仅此两个，无需 CANN toolkit）。官方下载页：https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/cannkit-preparations ，本演示用的是 `DDK-tools-next-6.0.1.0.zip` + `kirin9020-plugin-next-6.0.1.0.zip`，下载后放本仓库旁的 `dependencies/`（`prepare.sh` 读 `../dependencies`，位置不同改脚本内 `DEPS` 即可） |
+| 源码 | 上游样例库克隆到**本仓库同级目录**：`git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp`（阶段③ 的 npu_tuned_export 导出工程来自它；端侧 App 的 llm_demo.cpp 定制见 `06_demo_next_app/`）。⚠️ 克隆后须补打本地提交 `802b046`（UTF-8 半字符乱码修复 + instruct chat template 自动包装 + 自动化测试钩子——**未推上游**，缺它则 demo App 不自动包装 chat template、中文可能半字符乱码；可从本机该仓库 `git format-patch` / `git bundle` 导出） |
 
 ## 目录结构
 
 ```
 qwen25_1b5_run/
-├── REPRODUCE.md / QUANTIZATION.md / VERSION_CONTROL.md
+├── REPRODUCE.md / QUANTIZATION.md
 ├── pipeline.sh                   # ★ 统一产线入口（base|instruct × 各阶段）
 ├── pack.sh                       # ★ 阶段⑤ 汇集脚本（仓库根，双产线共用，pipeline.sh 自动传参）
 ├── profiles/                     # ★ 产线差异声明（模型/group/语料/命名/交付目录）
@@ -65,6 +56,7 @@ qwen25_1b5_run/
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
 ├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本 + 测试手册）
 ├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
+├── 06_demo_next_app/             # 端侧 App（CANNLLMEngineDemoNext）定制 llm_demo.cpp + patch
 └── logs/                         # 各阶段日志
 ```
 
@@ -131,6 +123,16 @@ bash pipeline.sh instruct pack                          # instruct（自动传�
 ```
 
 **手机实机部署（路线 B / HarmonyOS NEXT，已在 Kirin9020 真机验证通过）**：
+
+**App 工程首次准备**：本仓库不含端侧 App 完整工程——克隆上游样例库到同级目录、
+覆盖 llm_demo.cpp 后用 DevEco Studio 构建安装（`git am` 打补丁方式与改动说明见
+`06_demo_next_app/README.md`；SDK 头文件与 `libhiai_llm_engine.so` 放置见
+`05_device_files_base/NEXT_端侧测试手册.md`）：
+```bash
+git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp
+cp 06_demo_next_app/llm_demo.cpp \
+   ../cannkit_samplecode_lm_engine_cpp/CANN_LLM/CANN_LLM_Engine_Demo/CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp
+```
 
 1. `executor.json` / `context.json` 已改为 App 沙箱路径（`/data/storage/el2/base/haps/entry/files/`），
    注意三点：`model_path`/`weight_path` 用沙箱绝对路径；`tokenizer.path` 必须绝对路径；
