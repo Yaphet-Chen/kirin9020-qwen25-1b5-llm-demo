@@ -80,7 +80,13 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 - **`fake_quant_weight.pth`** —— **量化已烘进数值**的权重（每个浮点值 = s_w·round(w/s_w)）——阶段③导 ONNX 用：图是纯 float、没有量化节点，量化效果必须预先烤进权重常量（omg 后续再量化幂等无损，QUANTIZATION §2.11）；
 - **`quant_params_file`** —— 量化参数表，阶段④ omg 编译时吃它（注入 s16s4 融合算子）。
 
-三段各干一件事：stage1 GPTQ 逐层优化 int4 权重（误差补偿，吃校准语料）；stage2 EMA MinMax 定激活 int16 scale；stage3 把结果整理导出成上面三样。机制与最优配方见 QUANTIZATION.md §二/§一。
+三段接力（含中间产物）：
+```
+stage1 GPTQ 逐层优化 int4 权重（误差补偿，吃校准语料）─→ trained_quant_weight.pth（逐组 s_w/α，无 s_a）
+stage2 EMA MinMax 定激活 int16 scale                  ─→ trained.pth（＝上行 + s_a，即上面第一件）
+stage3 整理导出                                        ─→ fake_quant_weight.pth + quant_params_file（后两件）
+```
+`trained_quant_weight.pth`（6.0G）是 stage1→stage2 的接力棒，**留着的唯一价值**：想重跑 stage2 换 cutoff/样本时免 19min GPTQ；stage2 完成后即为可清理的中间产物。机制与最优配方见 QUANTIZATION.md §二/§一。
 
 校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
 ```bash
