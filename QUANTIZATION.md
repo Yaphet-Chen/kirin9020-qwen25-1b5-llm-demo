@@ -602,7 +602,15 @@ instruct 产线拿到全部交付版中最低的 +9.0%——g64（−1 PPL 级�
 
 ### 8.7 工程注意（本产线新增踩坑）
 
-1. **venv 的 activate 不可用**：本 venv 从别处移入，`bin/activate` 硬编码旧 `VIRTUAL_ENV=/home/chenyipei/test_omc/venv`，source 后 PATH 指向不存在目录 → `python: command not found`。所有脚本一律用 `venv/bin/python` 绝对路径（export.sh 已改）。
+1. **venv 移动后 activate 与入口脚本失效（2026-08-18 已修复）**：本 venv 从别处移入，`bin/activate`
+   的 `VIRTUAL_ENV` 与 ~45 个入口脚本（deepspeed/torchrun 等）的 shebang 硬编码了旧路径，
+   source 后 PATH 指向不存在目录 → `python: command not found`。修法（一次性 sed）：
+   ```bash
+   cd 01_prepare/venv/bin
+   grep -rlI '<旧venv绝对路径>' . | xargs -r sed -i 's#<旧venv绝对路径>#'"$PWD/.."'#g'
+   ```
+   修复后 `source activate` + 裸 `python` 均正常（实测）。venv 不进 git，换机重跑 make_venv.sh
+   原地创建则天然无此问题；本坑只在"venv 拷贝/移动后"复发。
 2. **评测环境的 deepspeed 检查**：直接跑 eval_ppl.py 需 `CUDA_HOME=01_prepare/cuda_stub` + PYTHONPATH 带 dopt/_autopatch（pipeline.sh 已内置；run.sh 一直有）。
-3. **GPU 被占时评测走 CPU**：`EVAL_DEVICE=cpu bash pipeline.sh instruct eval`（fp32 CPU 慢但数值等价；chat_test 由 CHAT_DEVICE 接管）。
+3. **GPU 被占时评测走 CPU**：`EVAL_DEVICE=cpu bash pipeline.sh instruct eval`（fp32 CPU 慢但数值等价；chat_compare 由 CHAT_DEVICE 接管）。
 4. **c512 量化的显存下限**：外部占用 ~14.7G（剩 ~14.7G 空闲）时 GPTQ c512/s1024 可跑通（本次实测）。
