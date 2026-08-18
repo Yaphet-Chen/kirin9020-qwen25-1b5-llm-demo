@@ -17,7 +17,7 @@ fi
 
 # 2. 用绝对路径填充 yaml（占位符 __ROOT__ → 实际 ROOT）
 #    EXPORT_YAML 可换配置（instruct 版用 model_info_instruct.yaml，pipeline.sh 自动传）
-yaml="${EXPORT_YAML:-model_info_target.yaml}"
+yaml="${EXPORT_YAML:-model_info_base.yaml}"
 sed "s|__ROOT__|$ROOT|g" "$yaml" > "npu_tuned_export/${yaml}"
 
 # 3. 执行导出（直接用 venv 的 python——本 venv 是从别处移入的，activate 内硬编码了

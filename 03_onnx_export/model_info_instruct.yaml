@@ -1,5 +1,5 @@
 # 导出工程配置 yaml —— Qwen2.5-1.5B-Instruct / kirin9020（int4 per-group 64 交付版）
-# 与 base 版 model_info_target.yaml 的差异仅三处：
+# 与 base 版 model_info_base.yaml 的差异仅三处：
 #   hf_model_path → Instruct 模型；config_file/quant_pth → instruct 量化工程；
 #   output_dir → output_instruct（隔离 base 产物，不互相覆盖）
 embedding_config:

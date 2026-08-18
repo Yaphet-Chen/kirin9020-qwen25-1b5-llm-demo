@@ -26,7 +26,7 @@
   02_quant/device_compare_report_3way_{sampling,greedy}.md   # 端云三方对比报告
   02_quant/data_zh/build_corpus.py                        # base 校准语料构建脚本
   02_quant/data_chat/build_corpus_chat.py                 # instruct 校准语料构建脚本
-  03_onnx_export/{export.sh, model_info_target.yaml, model_info_instruct.yaml}
+  03_onnx_export/{export.sh, model_info_base.yaml, model_info_instruct.yaml}
   04_omc_convert/convert.sh
   05_device_files_base/{context.json, executor.json, push_to_device_next.*,
                         diagnose_load.bat, collect_phone_replies.sh, NEXT_端侧测试手册.md}

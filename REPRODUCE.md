@@ -108,7 +108,7 @@ python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
 
 ## 阶段 ③ ONNX 导出（GPU，~3 分钟）
 ```bash
-bash 03_onnx_export/export.sh                          # base（默认 model_info_target.yaml）
+bash 03_onnx_export/export.sh                          # base（默认 model_info_base.yaml）
 EXPORT_YAML=model_info_instruct.yaml OUT_SUBDIR=output_instruct_embedding_out_no_output_pos \
   bash 03_onnx_export/export.sh                        # instruct（pipeline.sh 自动传）
 ```
