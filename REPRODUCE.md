@@ -26,7 +26,7 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 | GPU | NVIDIA GPU；**sm_120(Blackwell/RTX 5090) 必须 torch 2.8+cu128**，sm_90 及以下可用 torch 2.4 |
 | 系统 | Linux x86_64，glibc ≥ 2.35，`uv`、`unzip` |
 | 依赖包 | DDK 工具包 + kirin9020 平台插件包（仅此两个，无需 CANN toolkit）。官方下载页：https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/cannkit-preparations ，本演示用的是 `DDK-tools-next-6.0.1.0.zip` + `kirin9020-plugin-next-6.0.1.0.zip`，下载后放本仓库旁的 `dependencies/`（`prepare.sh` 读 `../dependencies`，位置不同改脚本内 `DEPS` 即可） |
-| 源码 | 上游样例库克隆到**本仓库同级目录**：`git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp`（阶段③ 的 npu_tuned_export 导出工程来自它；端侧 App 的 llm_demo.cpp 定制见 `06_demo_next_app/`）。⚠️ 克隆后须补打本地提交 `802b046`（UTF-8 半字符乱码修复 + instruct chat template 自动包装 + 自动化测试钩子——**未推上游**，缺它则 demo App 不自动包装 chat template、中文可能半字符乱码；可从本机该仓库 `git format-patch` / `git bundle` 导出） |
+| 源码 | 上游样例库克隆到**本仓库同级目录**：`git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp`（阶段③ 的 npu_tuned_export 导出工程来自它；`06_demo_next_app/` 包含端侧 App 的 llm_demo.cpp 定制）。⚠️ 克隆后**必须套用 `06_demo_next_app/` 的定制 llm_demo.cpp**（覆盖或 `git am`，即未推上游的定制改动：UTF-8 半字符乱码修复 + instruct chat template 自动包装）；缺它则 demo App 不自动包装 chat template、中文可能半字符乱码 |
 
 ## 目录结构
 
@@ -76,7 +76,6 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 > **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
 > 校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
 > `python 02_quant/data_zh_wiki/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
-> 手动方式（以 base 为例；instruct 把 testcase/config/model 换成 instruct 版，或看 pipeline.sh do_quant）：
 
 ```bash
 source 01_prepare/venv/bin/activate
@@ -89,15 +88,24 @@ TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage2   # ④激活�
 TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
 ```
 
-**（可选）验证精度与生成质量**
+**（可选）验证精度与生成质量**——推荐直接 `bash pipeline.sh <base|instruct> eval`（自动等价执行下面两组，GPU 被占时加 `EVAL_DEVICE=cpu`）：
+
 ```bash
+# ── base：PPL（维基留出集，交付口径劣化 +17.1%，见 QUANTIZATION.md §三）──
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
-  qwen25_1b5_base_9020/dopt_config.json qwen25_1b5_base_9020/train_output/trained.pth \
-  --tag repro --n_samples 8192 --data data_zh_wiki/test.txt   # 交付版中文口径（QUANTIZATION.md §三）
-python device_compare.py                                     # base 续写对比（端侧采样参数复刻）
+  qwen25_1b5_base_9020/dopt_config.json \
+  qwen25_1b5_base_9020/train_output/trained.pth \
+  --tag base --data data_zh_wiki/test.txt --n_samples 8192
+python device_compare.py        # 续写对比（复刻端侧采样参数，FP vs 量化）
+
+# ── instruct：PPL（对话留出集，劣化 +9.0%，见 §八）──
+python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
+  qwen25_1b5_instruct_9020/dopt_config.json \
+  qwen25_1b5_instruct_9020/train_output/trained.pth \
+  --tag instruct --data data_chat/test.txt --n_samples 8192
 python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
   qwen25_1b5_instruct_9020/dopt_config.json \
-  qwen25_1b5_instruct_9020/train_output/trained.pth          # 对话对比（chat_test 内置 chat template，instruct 用）
+  qwen25_1b5_instruct_9020/train_output/trained.pth   # 对话对比（内置 chat template）
 ```
 
 ## 阶段 ③ ONNX 导出（GPU，~3 分钟）
