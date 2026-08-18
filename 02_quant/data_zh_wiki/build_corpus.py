@@ -3,13 +3,13 @@
 
 来源: HF wikimedia/wikipedia 20231101.zh（流式，无需整库下载）
 产物:
-  dataset_zh.json  校准集 [{"text": ...}, ...] —— dopt train_files 用
+  dataset.json  校准集 [{"text": ...}, ...] —— dopt train_files 用
                    ★ 必须切成多行且行数 ≥ num_samples(1024)：stage1 拼接全文用，
                      stage2 按数据集"行"索引样本（整篇一行会在 stage2 越界崩溃）
-  test_zh.txt      留出测试集（eval_ppl.py --data 用，不参与校准）
+  test.txt      留出测试集（eval_ppl.py --data 用，不参与校准）
 
 用法: venv 的 python 直接运行（需 datasets）:
-  01_prepare/venv/bin/python 02_quant/data_zh/build_corpus.py
+  01_prepare/venv/bin/python 02_quant/data_zh_wiki/build_corpus.py
 """
 import json
 from datasets import load_dataset
@@ -45,8 +45,8 @@ for t in train_texts:
 if buf:
     rows.append({"text": "\n".join(buf)})
 
-with open("dataset_zh.json", "w", encoding="utf-8") as f:
+with open("dataset.json", "w", encoding="utf-8") as f:
     json.dump(rows, f, ensure_ascii=False)
-with open("test_zh.txt", "w", encoding="utf-8") as f:
+with open("test.txt", "w", encoding="utf-8") as f:
     f.write("\n\n".join(test_texts))
-print(f"写出 dataset_zh.json: {len(rows)} 行(≥1024 ✓, 平均 {sum(len(r['text']) for r in rows)//len(rows)} 字/行) + test_zh.txt")
+print(f"写出 dataset.json: {len(rows)} 行(≥1024 ✓, 平均 {sum(len(r['text']) for r in rows)//len(rows)} 字/行) + test.txt")

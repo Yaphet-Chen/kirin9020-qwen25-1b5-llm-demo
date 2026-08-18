@@ -52,7 +52,7 @@ qwen25_1b5_run/
 ├── 02_quant/                     # 阶段② 量化（三段式，run.sh 吃 TESTCASE/CFG/MODEL 环境变量）
 │   ├── config.yaml               #   base 默认配方（g128+zh维基，历史）
 │   ├── instruct_config.yaml      #   instruct 配方（g64+zh对话校准）
-│   ├── data_zh/                  #   base 校准语料（zh维基 2408 行）
+│   ├── data_zh_wiki/                  #   base 校准语料（zh维基 2408 行）
 │   ├── data_chat/                #   instruct 校准语料（Belle 多轮+单轮 ChatML 2401 行）
 │   ├── run.sh  edit_dopt_config.py  run_experiment.sh
 │   ├── eval_ppl.py  chat_test.py  device_compare.py
@@ -80,8 +80,8 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 ## 阶段 ② 量化（三段式，GPU，~35 分钟）
 
 > **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
-> 校准语料重建（可跳过，若 `data_zh/dataset_zh.json` / `data_chat/dataset_chat_zh.json` 已在）：
-> `python 02_quant/data_zh/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
+> 校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
+> `python 02_quant/data_zh_wiki/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
 > 手动方式（以 base 为例；instruct 把 testcase/config/model 换成 instruct 版，或看 pipeline.sh do_quant）：
 
 ```bash
@@ -99,7 +99,7 @@ TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage3   # ⑤参数�
 ```bash
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
   qwen25_1b5_base_9020/dopt_config.json qwen25_1b5_base_9020/train_output/trained.pth \
-  --tag repro --n_samples 8192 --data data_zh/test_zh.txt   # 交付版中文口径（QUANTIZATION.md §三）
+  --tag repro --n_samples 8192 --data data_zh_wiki/test.txt   # 交付版中文口径（QUANTIZATION.md §三）
 python device_compare.py                                     # base 续写对比（端侧采样参数复刻）
 python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
   qwen25_1b5_instruct_9020/dopt_config.json \

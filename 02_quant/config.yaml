@@ -3,7 +3,7 @@
 #   - g128: 端侧体积优先（SubGraph_0.weight 1.35G→1.27G），代价约 +1 PPL
 #   - 中文校准(zh维基): 中文劣化 25.9%→17.1%；英文 +39.6%（中文场景可接受）
 #   - 如需中英双语/英文优先: 改回 train_files: wikitext2（wiki 校准 en=19.66 档）
-# 语料重建: 02_quant/data_zh/（wikimedia wikipedia zh 流式，须切成 ≥num_samples 行！stage2 按行索引）
+# 语料重建: 02_quant/data_zh_wiki/（wikimedia wikipedia zh 流式，须切成 ≥num_samples 行！stage2 按行索引）
 kd:
   enable: False
   loss: mse
@@ -23,7 +23,7 @@ kd:
     - Qwen2DecoderLayer
 
 dataset:
-  train_files: /home/chenyipei/test_omc/qwen25_1b5_run/02_quant/data_zh/dataset_zh.json
+  train_files: /home/chenyipei/test_omc/qwen25_1b5_run/02_quant/data_zh_wiki/dataset.json
   train_samples: 1024
   ptq_samples: 1024
 

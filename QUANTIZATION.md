@@ -230,7 +230,7 @@ kd:                                # 蒸馏块（enable=False 时仅 loss/训练
   trainable_keys: [quant_alpha, norm]  # KD 可训练范围 = α + γ（精确边界见2.5/2.9：s_a 不可训）
   no_split_module_classes: [Qwen2DecoderLayer]
 dataset:
-  train_files: wikitext2           # 校准数据（英文版；交付版现指向 02_quant/data_zh/dataset_zh.json，
+  train_files: wikitext2           # 校准数据（英文版；交付版现指向 02_quant/data_zh_wiki/dataset.json，
                                     #   自定义 json 的记录数必须 ≥ num_samples——stage2 按记录索引样本）
   train_samples: 1024              # 训练样本数（KD 用；PTQ 下与 ptq_samples 等值即可）
   ptq_samples: 1024                # PTQ 重建样本数（stage1，喂 GPTQ 的 Hessian）
@@ -433,7 +433,7 @@ NPU 图内:  inputs_embeds = input_embed × embed_scales   ← 图内第一个�
 
 - 校准语料决定 GPTQ 的 Hessian 与 EMA 的 `s_a`——**激活统计匹配什么分布，什么分布就受保护**。中文校准把中文劣化 25.9%→17.1%（且这是在 g64→g128 本身掉精度的情况下取得的，纯域效应更大），但英文塌到 +39.6%。
 - 端侧部署面向中文场景 → 推荐 g128+中文校准版（产物 SubGraph_0.weight 1.27G，比 g64 版 1.35G 再省 82MB）；若需中英双语均衡，可混合中英语料校准（未实验，遗留项）。
-- 中文数据格式坑：dopt 的 stage1 拼接全文用，但 **stage2 按数据集"行"索引样本**——自定义 dataset.json 必须切成 ≥num_samples 行（本版切成 2408 行×~800字，行宽贴近 cutoff_len）。语料构建脚本见 logs + data_zh（wikimedia/wikipedia 20231101.zh 流式拉取，217篇/200万字，留出 28 篇做测试）。
+- 中文数据格式坑：dopt 的 stage1 拼接全文用，但 **stage2 按数据集"行"索引样本**——自定义 dataset.json 必须切成 ≥num_samples 行（本版切成 2408 行×~800字，行宽贴近 cutoff_len）。语料构建脚本见 data_zh_wiki/build_corpus.py（wikimedia/wikipedia 20231101.zh 流式拉取，217篇/200万字，留出 28 篇做测试）。
 
 
 
@@ -553,8 +553,8 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
 
 - **来源**（HF 流式）：`BelleGroup/multiturn_chat_0.8M`（解析 instruction 内嵌的 Human:/Assistant: 标记为真多轮 turns，保留 ≥2 问）+ `BelleGroup/train_0.5M_CN`（单轮指令），按对话数 2:1 交错。
 - **渲染**：用 **Instruct 模型自带的 chat template**（ChatML，带默认 system "You are Qwen..."）把每条对话渲染成文本——与端侧 App 侧 `apply_chat_template` 后喂引擎的 token 流一致。这正是"匹配对应的校准数据集"的含义：GPTQ 的 Hessian 与 EMA 的 `s_a` 统计什么分布，什么分布就受保护（§三域效应）。
-- **格式约束沿用 data_zh 的坑**：`dataset_chat_zh.json` 为 `[{"text":...}]` 行式 json，**行数 ≥ num_samples**（实测 2401 行）；每行打包若干条**完整**对话至 ~480 token（不跨行拆对话）；stage1 拼接全文（总量 856k token > GPTQ 需要的 524k），stage2 按行索引前 1024 行。
-- **留出集**：120 条对话渲染为 `test_chat_zh.txt`（70k 字符），`eval_ppl.py --data` 用，不参与校准。
+- **格式约束沿用 data_zh_wiki 的坑**：`dataset.json` 为 `[{"text":...}]` 行式 json，**行数 ≥ num_samples**（实测 2401 行）；每行打包若干条**完整**对话至 ~480 token（不跨行拆对话）；stage1 拼接全文（总量 856k token > GPTQ 需要的 524k），stage2 按行索引前 1024 行。
+- **留出集**：120 条对话渲染为 `test.txt`（70k 字符），`eval_ppl.py --data` 用，不参与校准。
 - 实测构成：多轮 2705 / 单轮 1005 条对话；行宽 min/avg/max = 166/360/640 token（>512 的行被 cutoff 截断，尾部损失可忽略）。
 
 ### 8.3 精度：chat 域 PPL（fp32 仿真，8160 token）

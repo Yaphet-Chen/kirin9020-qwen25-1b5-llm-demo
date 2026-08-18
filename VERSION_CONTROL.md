@@ -24,7 +24,7 @@
             device_compare.py(含 --emb/--greedy/--probe 模式), quant_sim.py,
             _autopatch/sitecustomize.py}
   02_quant/device_compare_report_3way_{sampling,greedy}.md   # 端云三方对比报告
-  02_quant/data_zh/build_corpus.py                        # base 校准语料构建脚本
+  02_quant/data_zh_wiki/build_corpus.py                        # base 校准语料构建脚本
   02_quant/data_chat/build_corpus_chat.py                 # instruct 校准语料构建脚本
   03_onnx_export/{export.sh, model_info_base.yaml, model_info_instruct.yaml}
   04_omc_convert/convert.sh
@@ -35,7 +35,7 @@
 
 不跟踪的（.gitignore 排除，可重建）:
   01_prepare/{venv,tools,models,cuda_stub}
-  02_quant/{qwen25_1b5_base_9020/, qwen25_1b5_instruct_9020/, exp_*/, data_zh/, data_chat/, *_config.yaml}
+  02_quant/{qwen25_1b5_base_9020/, qwen25_1b5_instruct_9020/, exp_*/, data_zh_wiki/, data_chat/, *_config.yaml}
   03_onnx_export/{output*/,dump/,npu_tuned_export/}    onnx 产物
   04_omc_convert/{model.*,Qwen25_1b5_*/}
   05_device_files*/{*.omc,*.weight,embedding*,tokenizer.json}

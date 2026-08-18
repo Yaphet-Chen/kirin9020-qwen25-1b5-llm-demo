@@ -11,11 +11,12 @@
 02_quant/qwen25_1b5_base_9020/
 02_quant/qwen25_1b5_instruct_9020/
 02_quant/exp_*/
-02_quant/data_zh/
+02_quant/data_zh_wiki/
 02_quant/data_chat/
 02_quant/*_config.yaml
 # 例外：交付配置与语料构建脚本要进 git
 !02_quant/instruct_config.yaml
+!02_quant/data_zh_wiki/build_corpus.py
 !02_quant/data_chat/build_corpus_chat.py
 
 # 通用兜底：任何位置的量化/模型产物
