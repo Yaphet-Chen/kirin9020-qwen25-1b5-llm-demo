@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 一键部署: 从云侧拉取 device 文件 -> 推送手机 -> 校验 -> 重启 App 验证
 # 用法:
-#   bash 05_device_files_base/deploy_from_cloud.sh           # 部署 instruct 版(默认, 实际部署形态)
-#   bash 05_device_files_base/deploy_from_cloud.sh base      # 部署 base 版(续写演示用)
+#   bash 06_demo_harmony_next_app/deploy_from_cloud.sh           # 部署 instruct 版(默认, 实际部署形态)
+#   bash 06_demo_harmony_next_app/deploy_from_cloud.sh base      # 部署 base 版(续写演示用)
 # 前置:
 #   1. 手机已连 USB 且装过 App(首次用 DevEco 装一次即可)
 #   2. 云侧密码: export CANN_SSH_PASS='xxx' (不设则 ssh 交互式询问)

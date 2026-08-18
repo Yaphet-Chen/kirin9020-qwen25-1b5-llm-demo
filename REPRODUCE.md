@@ -54,9 +54,9 @@ qwen25_1b5_run/
 │   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
 ├── 03_onnx_export/               # 阶段③ export.sh + model_info_{base,instruct}.yaml
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
-├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本）
-├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push/diagnose 脚本）
-├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App 与实机部署（定制 llm_demo.cpp + patch + NEXT 端侧测试手册）
+├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push 脚本）
+├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本）
+├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App 与实机部署（llm_demo.cpp 定制 + 手册 + deploy/collect/diagnose 工具）
 └── logs/                         # 各阶段日志
 ```
 
@@ -200,7 +200,7 @@ cp 06_demo_harmony_next_app/llm_demo.cpp \
 ### 每次换模型：推送 7 文件（HarmonyOS NEXT，Kirin 9020 真机验证通过）
 
 在连手机的 Windows 机上，交付目录里双击 `push_to_device_next.bat`（自动识别 Base/Instruct 文件名
-并逐项核验），推送后完全退出并重启 App；或用 `deploy_from_cloud.sh` 一键"云侧拉取→md5 校验→推送→
+并逐项核验），推送后完全退出并重启 App；或用 `06_demo_harmony_next_app/deploy_from_cloud.sh` 一键"云侧拉取→md5 校验→推送→
 重启验证"。`SubGraph_0.weight` 两模型同名，换模型必须**整组 7 文件重推**。演示对话**直接输入问题即可**
 ——定制 App 检测到 prompt 未含 `<|im_start|>` 时自动套 ChatML，引擎侧已配 `<|im_end|>` 停止符。
 

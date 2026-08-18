@@ -14,7 +14,7 @@
 2. **instruct chat template 自动包装**：instruct 模型下，prompt 未含 `<|im_start|>`
    时自动按 ChatML 格式包装（Qwen 官方 system prompt + user/assistant 段），
    配合 `05_device_files_instruct/` 交付版直接对话。
-3. **自动化测试钩子**：配合 `05_device_files_base/collect_phone_replies.sh` 与
+3. **自动化测试钩子**：配合 `同目录 collect_phone_replies.sh` 与
    `02_quant/continuation_compare.py` 做端云三方对比（详见
    `02_quant/reports/report_base_3way_{greedy,sampling}.md`）。
 
