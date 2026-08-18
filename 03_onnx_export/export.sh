@@ -20,11 +20,13 @@ fi
 yaml="${EXPORT_YAML:-model_info_instruct.yaml}"
 sed "s|__ROOT__|$ROOT|g" "$yaml" > "npu_tuned_export/${yaml}"
 
-# 3. 执行导出（直接用 venv 的 python——本 venv 是从别处移入的，activate 内硬编码了
-#    旧 VIRTUAL_ENV 路径，source 后 PATH 反而指向不存在的目录）
+# 3. 执行导出（直接用 venv 的 python，activate 已修复但绝对路径同样稳妥）
+#    产物目录命名规则（由导出脚本按配置拼后缀，勿手工建目录）：
+#    yaml 的 output_dir + "_embedding_out_no_output_pos" = 最终产物目录
+#      base:     output_embedding_out_no_output_pos/
+#      instruct: output_instruct_embedding_out_no_output_pos/
 export CUDA_HOME="$ROOT/01_prepare/cuda_stub"
 export PYTHONPATH="$DOPT:${PYTHONPATH:-}"
-mkdir -p dump output output_instruct
 
 cd npu_tuned_export
 "$VENV/bin/python" export_model_single_qwen2.py "$yaml" 2>&1 | tee "$ROOT/logs/export.log"

@@ -19,7 +19,6 @@ quant_pth:    __ROOT__/02_quant/qwen25_1b5_instruct_9020/train_output/fake_quant
 
 run_mode: hardware
 
-dump_path: __ROOT__/03_onnx_export/dump
 output_dir: __ROOT__/03_onnx_export/output_instruct
 
 lora:
