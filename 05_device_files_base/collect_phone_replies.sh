@@ -2,7 +2,7 @@
 # 真机批量收集回复:向 demo App 注入 prompt(test_prompt.txt 钩子)→ 驱动 UI 发送 →
 # 等生成完成 → 拉取 last_reply.txt 与 hilog 性能统计到 device_replies/。
 # 与云侧对比时配合 02_quant/continuation_compare.py（同名采样参数），报告见
-# 02_quant/report_3way_*.md。
+# 02_quant/report_{base,instruct}_3way_*.md。
 export HDC="/c/Program Files/Huawei/DevEco Studio/sdk/default/openharmony/toolchains/hdc.exe"
 export MSYS2_ARG_CONV_EXCL="*"
 REAL_DIR=/data/app/el2/100/base/com.huawei.cannkit.llmengine/haps/entry/files

@@ -505,7 +505,7 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
 
 对比三方：云侧 FP(bf16)、云侧量化仿真(fp32, continuation_compare.py)、真机 NPU int8 推理
 （真机侧由 `05_device_files_base/collect_phone_replies.sh` 自动收集，统一 n=600 口径）。
-完整数据见 `02_quant/report_3way_{sampling,greedy}.md`。要点：
+完整数据见 `02_quant/report_base_3way_{sampling,greedy}.md`。要点：
 
 - **贪心不是逐 token 一致**：5 条 prompt 中 4 条在 0~30 字节内分叉（英文条 ~100 字节后分叉），
   与 repetition_penalty 无关（rep=1.0 对照组前缀基本相同）。
