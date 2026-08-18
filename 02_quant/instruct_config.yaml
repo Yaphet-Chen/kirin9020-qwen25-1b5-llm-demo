@@ -1,5 +1,5 @@
 # Qwen2.5-1.5B-Instruct / kirin9020 量化配置（instruct 交付版：g64 + 中文对话校准）
-# 与 base 交付版（config.yaml）的差异：
+# 与 base 交付版（base_config.yaml）的差异：
 #   1. 模型: run.sh 用 MODEL=...Qwen2.5-1.5B-Instruct 覆盖（见 run_instruct.sh）
 #   2. 校准语料: data_chat/dataset.json —— Belle 多轮+单轮中文对话，
 #      经 Qwen chat template 渲染成 ChatML 文本（对齐端侧部署的真实输入分布）

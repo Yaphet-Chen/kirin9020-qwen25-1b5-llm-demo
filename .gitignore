@@ -17,6 +17,7 @@
 # 例外：交付配置与语料构建脚本要进 git
 #（注意目录忽略必须用 dir/* 形式，dir/ 形式会让 ! 例外失效——build_corpus_chat.py
 #  曾因此漏跟踪，换机 clone 会缺脚本）
+!02_quant/base_config.yaml
 !02_quant/instruct_config.yaml
 !02_quant/data_zh_wiki/build_corpus.py
 !02_quant/data_chat/build_corpus_chat.py

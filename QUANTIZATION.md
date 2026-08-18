@@ -20,12 +20,12 @@
 | input bit | **16** | dopt_config.json `input.bit` | 激活 16bit |
 | **lm_head** | **不量化 (float)** | dopt_config.json `lm_head.quant_strategy` | 输出层保 fp，好 0.9 PPL |
 | embed | Quant_Embed_MinMax | dopt_config.json | 唯一可用 embedding 策略 |
-| **校准样本** | **1024** | config.yaml `train/ptq/num_samples` | 收益递减点 |
-| **cutoff_len** | **512** | config.yaml `cutoff_len` | **易被忽略的大头**：128→512 好 0.15 PPL |
-| **校准语料** | **中文场景: zh维基 / 英文: wikitext2** | config.yaml `train_files` | 域效应：中文校准把中文劣化 25.9%→17.1%，英文塌到 +39.6%（§三 2×2） |
-| quant_param_2 | **False** | config.yaml | 必须！True 则 omg 不识别 s16s4 |
-| embedding_separate | True | config.yaml | 引擎要求 |
-| kd.enable | **False** (PTQ) | config.yaml | 大样本下 KD 无增益（见 §2.9/§三） |
+| **校准样本** | **1024** | *_config.yaml `train/ptq/num_samples` | 收益递减点 |
+| **cutoff_len** | **512** | *_config.yaml `cutoff_len` | **易被忽略的大头**：128→512 好 0.15 PPL |
+| **校准语料** | **中文场景: zh维基 / 英文: wikitext2** | *_config.yaml `train_files` | 域效应：中文校准把中文劣化 25.9%→17.1%，英文塌到 +39.6%（§三 2×2） |
+| quant_param_2 | **False** | *_config.yaml | 必须！True 则 omg 不识别 s16s4 |
+| embedding_separate | True | *_config.yaml | 引擎要求 |
+| kd.enable | **False** (PTQ) | *_config.yaml | 大样本下 KD 无增益（见 §2.9/§三） |
 | linear 策略 | Quant_act_weight_eco | dopt_config.json | aigc 系列不兼容（见四.3） |
 
 **产物**（05_device_files_base/ 现有成品 = **base 交付版 g128+中文校准**）：`Qwen25_1b5_Base_kirin9020.omc` 3.7M + `SubGraph_0.weight` 1.27G（omg 成功，s16s4 融合 3136 次；g64 版为 1.35G / 4704 次）。instruct 交付版见 §八。按 REPRODUCE.md / pipeline.sh 全流程可复现等价产物。
@@ -67,7 +67,7 @@
 
 | 阶段 | 功能 | 输入 | 输出 | 耗时(s1024/c512) |
 |---|---|---|---|---|
-| **stage1 权重量化** | GPTQ 分块重建（或 KD 蒸馏训练）：优化每层 int4 权重的量化参数（scale/alpha） | 源模型 + dopt_config + config.yaml | `trained_quant_weight.pth` (6.0G) | ~19 min |
+| **stage1 权重量化** | GPTQ 分块重建（或 KD 蒸馏训练）：优化每层 int4 权重的量化参数（scale/alpha） | 源模型 + dopt_config + *_config.yaml | `trained_quant_weight.pth` (6.0G) | ~19 min |
 | **stage2 激活量化** | EMA MinMax 校准：跑 num_samples 个样本统计激活分布，定 `s_a` | stage1 产物 | `trained.pth` (6.0G) ← **PPL 仿真/对话测试用它** | ~10 min |
 | **stage3 参数提取** | 导出部署格式 | stage2 产物 | `fake_quant_weight.pth`(6.7G, 给 ONNX 导出) + `quant_params_file`(g64≈1.1G / g128≈556M, 给 omg --compress_conf) + `embedding_weights/dequant_scale`(分离 embedding) | ~4 min |
 
@@ -220,7 +220,7 @@ s_e:  trained.pth · embed weight_quantizer.s → 独立 bin:
 体积佐证：int4 权重 ≈655M + lm_head fp16 ≈467M ≈ 1.12G，SubGraph 1.3G 的
 余量容纳 s_w/s_a 表。
 
-### 2.6 config.yaml（量化工程配置）字段全解
+### 2.6 配方 yaml（base_config.yaml / instruct_config.yaml，同 schema）字段全解
 
 ```yaml
 kd:                                # 蒸馏块（enable=False 时仅 loss/训练超参被忽略）
@@ -444,7 +444,7 @@ NPU 图内:  inputs_embeds = input_embed × embed_scales   ← 图内第一个�
 1. **`quant_param_2` 必须 False**。True 产出的 quant_params_file（690M）omg 无法融合 s16s4 → 所有 MatMul don't support。False 的文件：g128+lmfp≈556M（交付版）/ g64+lmfp≈1.1G / g128+lm量化≈655M（历史值）。验证手段：omg 日志 s16s4 计数（成功时应数千次：g128 版 3136 / g64 版 4704）。
 2. **dopt_config 不加 output 段**。指南称 9020 加 output 提速，实测加了 omg 反而不识别。
 3. **aigc 系列策略（Quant_aigc_ptq/qat）与三段式管线不兼容**：stage1 能跑完，stage2 加载 checkpoint 时 scale 形状不匹配崩溃（`[215040,1] vs [1536,1]`）。两种均实测崩。linear 只能用 Quant_act_weight_eco。
-4. **KD 蒸馏的正确打开方式**：config.yaml 的 kd 块里必须显式加
+4. **KD 蒸馏的正确打开方式**：配方 yaml（*_config.yaml）的 kd 块里必须显式加
    ```yaml
    teacher:
      teacher_config_path: <模型路径>   # 缺此字段 dopt 静默跳过 KD，不报错！

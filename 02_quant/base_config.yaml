@@ -1,4 +1,4 @@
-# Qwen2.5-1.5B / kirin9020 量化配置（当前交付版：g128 + 中文校准）
+# Qwen2.5-1.5B（base）/ kirin9020 量化配方（base 交付版：g128 + 中文校准；与 instruct_config.yaml 同 schema）
 # 决策依据（QUANTIZATION.md §三 2×2 矩阵）:
 #   - g128: 端侧体积优先（SubGraph_0.weight 1.35G→1.27G），代价约 +1 PPL
 #   - 中文校准(zh维基): 中文劣化 25.9%→17.1%；英文 +39.6%（中文场景可接受）

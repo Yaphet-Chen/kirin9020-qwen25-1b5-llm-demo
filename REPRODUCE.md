@@ -42,7 +42,7 @@ qwen25_1b5_run/
 │   ├── venv/ tools/ cuda_stub/   # (生成)
 │   └── models/Qwen2.5-1.5B/  Qwen2.5-1.5B-Instruct/   # (生成/下载)
 ├── 02_quant/                     # 阶段② 量化（三段式，run.sh 吃 TESTCASE/CFG/MODEL 环境变量）
-│   ├── config.yaml               #   base 配方（g128+zh维基校准）
+│   ├── base_config.yaml          #   base 配方（g128+zh维基校准；与 instruct_config.yaml 同 schema）
 │   ├── instruct_config.yaml      #   instruct 配方（g64+zh对话校准）
 │   ├── data_zh_wiki/             #   base 校准语料（build_corpus.py + dataset.json + test.txt）
 │   ├── data_chat/                #   instruct 校准语料（build_corpus_chat.py + dataset.json + test.txt）
@@ -64,7 +64,7 @@ qwen25_1b5_run/
 
 ## 阶段 ① 准备（venv/tools/models 已就绪时可跳过）
 
-**干什么**：搭一次性的量化环境，产物全落 `01_prepare/`、重跑幂等。建独立 venv（torch 2.8 是 5090/sm_120 的硬要求）；解压 DDK 组装工具树（阶段②的 dopt 量化库 + 阶段④的 omg 编译器都在里面）；下载 base/instruct 两个源模型。
+**干什么**：搭一次性的量化环境，产物全落 `01_prepare/`。建独立 venv（torch 2.8 是 5090/sm_120 的硬要求）；解压 DDK 组装工具树（阶段②的 dopt 量化库 + 阶段④的 omg 编译器都在里面）；下载 base/instruct 两个源模型。
 
 ```bash
 bash 01_prepare/make_venv.sh     # uv 建 venv，torch 2.8（输出应含 sm_120）
@@ -82,12 +82,11 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 
 三段各干一件事：stage1 GPTQ 逐层优化 int4 权重（误差补偿，吃校准语料）；stage2 EMA MinMax 定激活 int16 scale；stage3 把结果整理导出成上面三样。机制与最优配方见 QUANTIZATION.md §二/§一。
 
-> **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
-> 校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
-> `python 02_quant/data_zh_wiki/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
-> 手动方式下述示例 = **instruct（各脚本默认口径，即实际部署形态）**；跑 base 需显式换三样环境变量
-> `TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml MODEL=$PWD/../01_prepare/models/Qwen2.5-1.5B`
-> （**MODEL 不可省**，默认已是 instruct 模型），group 换 128。
+校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
+```bash
+python 02_quant/data_zh_wiki/build_corpus.py #（zh 维基）
+python 02_quant/data_chat/build_corpus_chat.py #（Belle 对话，ChatML 渲染）
+```
 
 ```bash
 source 01_prepare/venv/bin/activate
@@ -196,31 +195,3 @@ cp 06_demo_harmony_next_app/llm_demo.cpp \
 
 之后用 DevEco Studio 打开 `CANNLLMEngineDemoNext` 工程构建、安装到手机——首次装完 App 沙箱目录才会出现，阶段⑤ 的 push 才有落点。工程内 SDK 文件（7 个头文件 + `libhiai_llm_engine.so`，来自 DDK 包）的放置与 hvigor/DevEco 兼容性说明在 `06_demo_harmony_next_app/README.md`；装好 App 后的模型推送与运行排障见 `05_device_files_base/NEXT_端侧测试手册.md`。
 
----
-
-## 验证清单（每阶段成功标志与产物大小）
-
-| 阶段 | 成功标志 | 产物（实测大小） |
-|---|---|---|
-| ②.1 | `generate plugin quang config please set quant strategy firstly` | dopt_config.json |
-| ②.2 | 分布 `{Quant_Embed_MinMax:1, Quant_act_weight_eco:196, float:1}` | — |
-| ②.3 | `weight quant done!!!` | trained_quant_weight.pth ~6.0G |
-| ②.4 | `quant done !!!` | trained.pth ~6.0G |
-| ②.5 | `quant params file build done` | **quant_params_file：g128≈556M / g64≈1.1G**（690M 说明 quant_param_2 配错）+ fake_quant_weight.pth ~6.7G + embedding 223M/594K |
-| ③ | `generating finished` | model.onnx 439K + model.pb ~5.9G + model_64_2048.embedding_*（pack 时改名 model_{base,instruct}_*） |
-| ④ | `generate offline model success`，日志 **s16s4 融合 g128 3136 / g64 4704 次**（按字符串出现次数计：`grep -o s16s4 log \| wc -l`；按行数 grep -c 会得到 3136 等歧义值）、don't support=0 | **omc ~3.7M + SubGraph_0.weight：g128 1.27G / g64 1.35G** |
-| ⑤ | 7 文件齐全（omc/embedding 文件名带 `_Base_`/`_Instruct_` 标记） | 总 ~1.5G（g64 版 ~1.6G） |
-| ⑥ | DevEco 构建安装成功、App 启动日志出现 `LLM Engine Init Done.`（装好后 push ⑤ 的 7 文件再重启 App） | 定制 llm_demo.cpp 已覆盖进 App 工程（一次性） |
-
-## 常见问题（详见 QUANTIZATION.md 四）
-
-| 症状 | 原因/解法 |
-|---|---|
-| `No module named 'datasets'` / deepspeed CUDA_HOME 报错 | 未激活 venv；run.sh 已内置 CUDA_HOME stub |
-| omg `Permission denied` | interpreter 未 patchelf（重跑 prepare.sh 第4步） |
-| omg 全部 `MatMul don't support` | quant_param_2=True 或加了 output 段 → 改回 False/删 output |
-| 评测/仿真 PPL=nan | fp16 溢出 → 必须 fp32（eval_ppl.py 默认已是） |
-| 量化/评测 OOM | GPU 被他人占用（nvidia-smi 查）→ 等空闲或降 cutoff_len |
-| 对话测试输出乱码 | base 模型不支持 chat template（坑：chat_compare 内置 template）→ base 用 continuation_compare.py 续写口径；chat 对话用 instruct 产线 |
-| torch CUDA `no kernel image` | torch 版本不含你的 sm 架构（5090 需 2.8+cu128） |
-| 想改 prefill 档位（16/128/三档） | **不支持**——档位在 dopt stage3 的 quant_params_file 里登记锁定为 {decode=1, prefill=64}，多档 omg 编译必失败（QUANTIZATION.md §三 prefill 档位实测） |
