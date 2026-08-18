@@ -54,9 +54,9 @@ qwen25_1b5_run/
 │   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
 ├── 03_onnx_export/               # 阶段③ export.sh + model_info_{base,instruct}.yaml
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
-├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本 + 测试手册）
+├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本）
 ├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
-├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App（CANNLLMEngineDemoNext）定制 llm_demo.cpp + patch
+├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App 与实机部署（定制 llm_demo.cpp + patch + NEXT 端侧测试手册）
 └── logs/                         # 各阶段日志
 ```
 
@@ -169,34 +169,21 @@ bash 04_omc_convert/convert.sh       # instruct（= 各脚本默认；pipeline.s
 6. **`context.json`** —— 采样配置：top-k/top-p/温度/重复惩罚/seed（base 用抗复读参数，instruct 用官方推荐值）；
 7. **`executor.json`** —— 引擎配置：模型/权重/embedding 的路径与 llm_config（层数/头数/档位等）。
 
-整个目录拷到连手机的 Windows 机，双击 `push_to_device_next.bat` 推进 App 沙箱即可。
+整个目录拷到连手机的 Windows 机，推送与运行见阶段⑥。
 
 ```bash
 bash pipeline.sh instruct pack     # instruct（= 裸跑 bash pack.sh 的默认值）
 bash pipeline.sh base pack         # base 同理（pipeline 自动传 base 一整套参数）
 ```
 
-**手机实机部署（HarmonyOS NEXT，已在 Kirin9020 真机验证通过；前置 = App 已按阶段⑥ 装好）**：
+## 阶段 ⑥ 端侧 App 与实机部署（App 装一次，模型随时换）
 
-1. `executor.json` / `context.json` 已改为 App 沙箱路径。**executor.json 里说的"绝对路径"一律指沙箱绝对路径**
-   （`/data/storage/el2/base/haps/entry/files/...`，App 进程视角；与 hdc 推送用的设备真实路径
-   `/data/app/el2/100/...` 是两套命名空间，对照表见 NEXT 手册）。三处路径、三种解析规则
-   （分属不同 JSON 块、引擎各自独立解析，勿统一写法——两种想当然都实测翻过车）：
-   - `model_path` / `weight_path`（autoregressive 块）：沙箱绝对路径，引擎直接加载；
-   - `tokenizer.path`（tokenizer 块）：同为沙箱绝对路径——写相对路径引擎找不到；
-   - `embedding_weights` / `embedding_dequant_scale`（llm_config 块）：**相对**文件名——引擎自动拼
-     `weight_path` 前缀，写绝对路径会被拼成双重路径。
-2. **换模型演示**：在连手机的 Windows 机器上运行交付目录里的 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，
-   脚本自动识别目录里的 Base/Instruct 文件名并核验。详细步骤与排错见 `05_device_files_base/NEXT_端侧测试手册.md`。
+**干什么**：手机侧两件事——**装 App**（一次性）和**推模型**（每次换模型）。本仓库不含 App 完整工程：
+工程来自上游样例库，本仓库只保留 `llm_demo.cpp` 的**定制改动**（`06_demo_harmony_next_app/`，未推上游：
+UTF-8 半字符乱码修复、instruct chat template 自动包装、三方对比测试钩子——缺它则 App 不自动包装
+chat template、中文可能半字符乱码）。装好后换模型只重跑⑤ pack + 本阶段推送，App 不用动。
 
-## 阶段 ⑥ 端侧 App（CANNLLMEngineDemoNext，一次性准备）
-
-**干什么**：准备手机上真正跑模型的 HarmonyOS App。本仓库不含 App 完整工程——工程来自上游样例库，
-本仓库只保留核心源文件 `llm_demo.cpp` 的**定制改动**（`06_demo_harmony_next_app/`，未推上游）：
-UTF-8 流式半字符乱码修复（中文字符跨回调先攒后报）、instruct chat template 自动包装
-（prompt 未含 `<|im_start|>` 时自动套 ChatML）、端云三方对比测试钩子。
-
-**装一次即可**——与模型迭代无关，换模型只需重跑阶段⑤ 的 push，App 不用动；缺了这份定制则 App 不自动包装 chat template、中文可能半字符乱码。
+### 装一次：构建安装 App
 
 ```bash
 # 1. 克隆上游样例库到本仓库同级目录（阶段③ 的 npu_tuned_export 导出工程也来自它）
@@ -206,5 +193,22 @@ cp 06_demo_harmony_next_app/llm_demo.cpp \
    ../cannkit_samplecode_lm_engine_cpp/CANN_LLM/CANN_LLM_Engine_Demo/CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp
 ```
 
-之后用 DevEco Studio 打开 `CANNLLMEngineDemoNext` 工程构建、安装到手机——首次装完 App 沙箱目录才会出现，阶段⑤ 的 push 才有落点。工程内 SDK 文件（7 个头文件 + `libhiai_llm_engine.so`，来自 DDK 包）的放置与 hvigor/DevEco 兼容性说明在 `06_demo_harmony_next_app/README.md`；装好 App 后的模型推送与运行排障见 `05_device_files_base/NEXT_端侧测试手册.md`。
+之后用 DevEco Studio 打开工程构建、安装到手机——首次装完 App 沙箱目录才会出现，推送的文件才有落点。
+工程内 SDK 文件（7 个头文件 + `libhiai_llm_engine.so`，来自 DDK 包）放置与 hvigor/DevEco 兼容性
+见 `06_demo_harmony_next_app/README.md`。
 
+### 每次换模型：推送 7 文件（HarmonyOS NEXT，Kirin 9020 真机验证通过）
+
+在连手机的 Windows 机上，交付目录里双击 `push_to_device_next.bat`（自动识别 Base/Instruct 文件名
+并逐项核验），推送后完全退出并重启 App；或用 `deploy_from_cloud.sh` 一键"云侧拉取→md5 校验→推送→
+重启验证"。`SubGraph_0.weight` 两模型同名，换模型必须**整组 7 文件重推**。
+
+**executor.json 路径三规则**（已配好，改动时勿破坏；三处分属不同 JSON 块、引擎各自独立解析）：
+executor.json 里的"绝对路径"一律指**沙箱绝对路径**（`/data/storage/el2/base/haps/entry/files/...`，
+App 进程视角；与 hdc 推送用的设备真实路径 `/data/app/el2/100/...` 是两套命名空间）：
+- `model_path` / `weight_path`（autoregressive 块）：沙箱绝对路径，引擎直接加载；
+- `tokenizer.path`（tokenizer 块）：同为沙箱绝对路径——写相对路径引擎找不到；
+- `embedding_weights` / `embedding_dequant_scale`（llm_config 块）：**相对**文件名——引擎自动拼
+  `weight_path` 前缀，写绝对路径会被拼成双重路径。
+
+详细步骤与排障：`06_demo_harmony_next_app/NEXT_端侧测试手册.md`。
