@@ -16,7 +16,7 @@
    配合 `05_device_files_instruct/` 交付版直接对话。
 3. **自动化测试钩子**：配合 `05_device_files_base/collect_phone_replies.sh` 与
    `02_quant/continuation_compare.py` 做端云三方对比（详见
-   `02_quant/device_compare_report_3way_{greedy,sampling}.md`）。
+   `02_quant/report_3way_{greedy,sampling}.md`）。
 
 ## 怎么用（首次部署端侧 App）
 
