@@ -14,7 +14,7 @@
 | instruct（对话） | Qwen2.5-1.5B-Instruct + g64 量化 + zh 对话校准 | 评测见 QUANTIZATION.md §八 | omc ~3.7M + weight 1.35G |
 
 端云一致性有三方对比报告（云侧 fp / 云侧量化仿真 / 端侧真机）：
-`02_quant/report_base_3way_{greedy,sampling}.md`。
+`02_quant/reports/report_base_3way_{greedy,sampling}.md`。
 
 ## 快速上手
 

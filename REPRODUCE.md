@@ -48,7 +48,7 @@ qwen25_1b5_run/
 │   ├── data_chat/                #   instruct 校准语料（build_corpus_chat.py + dataset.json + test.txt）
 │   ├── run.sh  edit_dopt_config.py  run_experiment.sh
 │   ├── eval_ppl.py  chat_compare.py  continuation_compare.py  quant_sim.py
-│   ├── report_{base,instruct}_3way_{greedy,sampling,chat}.md   # 端云三方对比报告（按模型+口径命名）
+│   ├── reports/                  #   端云三方对比报告 report_{base,instruct}_3way_<口径>.md
 │   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
 │   ├── qwen25_1b5_base_9020/     #   (生成) base 交付量化工程（g128+zh维基）
 │   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
