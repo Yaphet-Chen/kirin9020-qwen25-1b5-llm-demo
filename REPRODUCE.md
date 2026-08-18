@@ -43,6 +43,7 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 qwen25_1b5_run/
 ├── REPRODUCE.md / QUANTIZATION.md / VERSION_CONTROL.md
 ├── pipeline.sh                   # ★ 统一产线入口（base|instruct × 各阶段）
+├── pack.sh                       # ★ 阶段⑤ 汇集脚本（仓库根，双产线共用，pipeline.sh 自动传参）
 ├── profiles/                     # ★ 产线差异声明（模型/group/语料/命名/交付目录）
 │   ├── base.env  instruct.env
 ├── 01_prepare/                   # 阶段① 环境
@@ -50,18 +51,19 @@ qwen25_1b5_run/
 │   ├── venv/ tools/ cuda_stub/   # (生成)
 │   └── models/Qwen2.5-1.5B/  Qwen2.5-1.5B-Instruct/   # (生成/下载)
 ├── 02_quant/                     # 阶段② 量化（三段式，run.sh 吃 TESTCASE/CFG/MODEL 环境变量）
-│   ├── config.yaml               #   base 默认配方（g128+zh维基，历史）
+│   ├── config.yaml               #   base 配方（g128+zh维基校准）
 │   ├── instruct_config.yaml      #   instruct 配方（g64+zh对话校准）
-│   ├── data_zh_wiki/                  #   base 校准语料（zh维基 2408 行）
-│   ├── data_chat/                #   instruct 校准语料（Belle 多轮+单轮 ChatML 2401 行）
+│   ├── data_zh_wiki/             #   base 校准语料（build_corpus.py + dataset.json + test.txt）
+│   ├── data_chat/                #   instruct 校准语料（build_corpus_chat.py + dataset.json + test.txt）
 │   ├── run.sh  edit_dopt_config.py  run_experiment.sh
-│   ├── eval_ppl.py  chat_test.py  device_compare.py
+│   ├── eval_ppl.py  chat_test.py  device_compare.py  quant_sim.py
+│   ├── device_compare_report_3way_{greedy,sampling}.md   # 端云三方对比报告
 │   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
-│   ├── qwen25_1b5_base_9020/              #   (生成) base 交付量化工程（g128+zh）
+│   ├── qwen25_1b5_base_9020/     #   (生成) base 交付量化工程（g128+zh维基）
 │   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
-├── 03_onnx_export/               # 阶段③ export.sh（EXPORT_YAML 可换）+ base/instruct 两份 yaml
+├── 03_onnx_export/               # 阶段③ export.sh + model_info_{base,instruct}.yaml
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
-├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push 脚本 + 测试手册）
+├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本 + 测试手册）
 ├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
 └── logs/                         # 各阶段日志
 ```

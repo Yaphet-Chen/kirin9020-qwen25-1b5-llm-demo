@@ -29,7 +29,8 @@
   03_onnx_export/{export.sh, model_info_base.yaml, model_info_instruct.yaml}
   04_omc_convert/convert.sh
   05_device_files_base/{context.json, executor.json, push_to_device_next.*,
-                        diagnose_load.bat, collect_phone_replies.sh, NEXT_端侧测试手册.md}
+                        diagnose_load.bat, collect_phone_replies.sh, deploy_from_cloud.sh,
+                        NEXT_端侧测试手册.md}
   05_device_files_instruct/{context*.json, executor.json, push_to_device_next.*,
                         diagnose_load.bat, README_DEMO.md}
 

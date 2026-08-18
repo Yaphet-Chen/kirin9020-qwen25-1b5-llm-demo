@@ -15,7 +15,7 @@
 #
 # 演示流程（先 base 后 instruct）:
 #   bash pipeline.sh base && bash pipeline.sh instruct
-#   产物分别在 05_device_files/ 与 05_device_files_instruct/，
+#   产物分别在 05_device_files_base/ 与 05_device_files_instruct/，
 #   分别拷到连手机的 Windows 机跑各自目录里的 push_to_device_next.bat 即可。
 #
 # profile 差异（profiles/*.env）:
