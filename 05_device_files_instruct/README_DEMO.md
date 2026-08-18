@@ -28,3 +28,8 @@ bash pipeline.sh instruct status   # 查看产物状态
 ```
 配方：int4 per-group 64 + 中文对话校准（Belle 多轮+单轮，ChatML 渲染，2401 行 / 856k token）
 + s1024 + c512 + lm_head 保 fp + PTQ。详见 ../QUANTIZATION.md §instruct。
+
+## 排障
+
+部署失败/加载报错的排查步骤见 `../05_device_files_base/NEXT_端侧测试手册.md`
+（hilog 抓取、LoadPrivateWeight 失败等案例；`diagnose_load.bat` 同款用法）。

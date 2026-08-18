@@ -64,5 +64,6 @@ for p in "${PROMPTS[@]}"; do
   "$HDC" shell "hilog -x" 2>/dev/null | grep "LLM_DEMO" | grep -E "inputTokenCount|outputTokenCount|preFillTimeMs|per token" >> "$OUT"
   wc -c "device_replies/reply_$i.txt" 2>/dev/null >> "$OUT"
 done
+rm -f tp_send.txt          # 传输中转文件，跑完即清（不留散落产物）
 echo DONE_ALL >> "$OUT"
 echo ALL_SENT
