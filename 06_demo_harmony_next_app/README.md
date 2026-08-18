@@ -15,7 +15,7 @@
    时自动按 ChatML 格式包装（Qwen 官方 system prompt + user/assistant 段），
    配合 `05_device_files_instruct/` 交付版直接对话。
 3. **自动化测试钩子**：配合 `05_device_files_base/collect_phone_replies.sh` 与
-   `02_quant/device_compare.py` 做端云三方对比（详见
+   `02_quant/continuation_compare.py` 做端云三方对比（详见
    `02_quant/device_compare_report_3way_{greedy,sampling}.md`）。
 
 ## 怎么用（首次部署端侧 App）
@@ -27,17 +27,28 @@ git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp
 
 # 2. 套用本仓库的 llm_demo.cpp（二选一）
 # 方式 A：直接覆盖（上游演进后仍然可用，推荐）
-cp 06_demo_next_app/llm_demo.cpp \
+cp 06_demo_harmony_next_app/llm_demo.cpp \
    ../cannkit_samplecode_lm_engine_cpp/CANN_LLM/CANN_LLM_Engine_Demo/CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp
 # 方式 B：git am 打补丁（保留改动说明，基于上游 762941b；冲突时改用方式 A 手动合并）
 cd ../cannkit_samplecode_lm_engine_cpp
-git am ../qwen25_1b5_run/06_demo_next_app/demo_next_llm_demo.patch
+git am ../qwen25_1b5_run/06_demo_harmony_next_app/demo_next_llm_demo.patch
 ```
 
 之后用 DevEco Studio 打开 `CANNLLMEngineDemoNext` 工程构建、安装到手机。
-SDK 头文件（7 个）与 `libhiai_llm_engine.so` 放入工程、hvigor/DevEco 版本兼容性等
-细节见 `05_device_files_base/NEXT_端侧测试手册.md`（这两个文件来自 DDK 包的
-`ddk/hiai_lm_engine` 目录，DDK 下载页见 REPRODUCE.md 前置条件）。
+
+## 工程内 SDK 文件（首次构建前确认）
+
+上游克隆的工程**不含**华为 llm_engine SDK，需从 DDK 包（`DDK-tools-next-6.0.1.0.zip`
+的 `ddk/hiai_lm_engine` 目录，下载页见 REPRODUCE.md 前置条件）放入工程两处：
+
+| 文件 | 放到工程内 |
+|---|---|
+| SDK 头文件（7 个） | `CANNLLMEngineDemoNext/entry/src/main/cpp/include/` |
+| `libhiai_llm_engine.so` | `CANNLLMEngineDemoNext/entry/src/main/cpp/lib64/` |
+
+工程兼容性已核对：hvigor 5.0.5 工程 + 本机 DevEco Studio 6.1.1 构建通过
+（pages/资源文件完整性一并核对过）。装好 App 后，模型文件推送与运行排障见
+`05_device_files_base/NEXT_端侧测试手册.md`。
 
 ## 文件清单
 

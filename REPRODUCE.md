@@ -26,7 +26,7 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 | GPU | NVIDIA GPU；**sm_120(Blackwell/RTX 5090) 必须 torch 2.8+cu128**，sm_90 及以下可用 torch 2.4 |
 | 系统 | Linux x86_64，glibc ≥ 2.35，`uv`、`unzip` |
 | 依赖包 | DDK 工具包 + kirin9020 平台插件包（仅此两个，无需 CANN toolkit）。官方下载页：https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/cannkit-preparations ，本演示用的是 `DDK-tools-next-6.0.1.0.zip` + `kirin9020-plugin-next-6.0.1.0.zip`，下载后放本仓库旁的 `dependencies/`（`prepare.sh` 读 `../dependencies`，位置不同改脚本内 `DEPS` 即可） |
-| 源码 | 上游样例库克隆到**本仓库同级目录**：`git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp`（阶段③ 的 npu_tuned_export 导出工程来自它；`06_demo_next_app/` 包含端侧 App 的 llm_demo.cpp 定制）。⚠️ 克隆后**必须套用 `06_demo_next_app/` 的定制 llm_demo.cpp**（覆盖或 `git am`，即未推上游的定制改动：UTF-8 半字符乱码修复 + instruct chat template 自动包装）；缺它则 demo App 不自动包装 chat template、中文可能半字符乱码 |
+| 源码 | 上游样例库克隆到**本仓库同级目录**：`git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp`（阶段③ 的 npu_tuned_export 导出工程来自它；`06_demo_harmony_next_app/` 包含端侧 App 的 llm_demo.cpp 定制）。⚠️ 克隆后**必须套用 `06_demo_harmony_next_app/` 的定制 llm_demo.cpp**（覆盖或 `git am`，即未推上游的定制改动：UTF-8 半字符乱码修复 + instruct chat template 自动包装）；缺它则 demo App 不自动包装 chat template、中文可能半字符乱码 |
 
 ## 目录结构
 
@@ -47,7 +47,7 @@ qwen25_1b5_run/
 │   ├── data_zh_wiki/             #   base 校准语料（build_corpus.py + dataset.json + test.txt）
 │   ├── data_chat/                #   instruct 校准语料（build_corpus_chat.py + dataset.json + test.txt）
 │   ├── run.sh  edit_dopt_config.py  run_experiment.sh
-│   ├── eval_ppl.py  chat_test.py  device_compare.py  quant_sim.py
+│   ├── eval_ppl.py  chat_compare.py  continuation_compare.py  quant_sim.py
 │   ├── device_compare_report_3way_{greedy,sampling}.md   # 端云三方对比报告
 │   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
 │   ├── qwen25_1b5_base_9020/     #   (生成) base 交付量化工程（g128+zh维基）
@@ -56,13 +56,15 @@ qwen25_1b5_run/
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
 ├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本 + 测试手册）
 ├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
-├── 06_demo_next_app/             # 端侧 App（CANNLLMEngineDemoNext）定制 llm_demo.cpp + patch
+├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App（CANNLLMEngineDemoNext）定制 llm_demo.cpp + patch
 └── logs/                         # 各阶段日志
 ```
 
 ---
 
 ## 阶段 ① 准备（venv/tools/models 已就绪时可跳过）
+
+**干什么**：搭一次性的量化环境，产物全落 `01_prepare/`、重跑幂等。建独立 venv（torch 2.8 是 5090/sm_120 的硬要求）；解压 DDK 组装工具树（阶段②的 dopt 量化库 + 阶段④的 omg 编译器都在里面）；下载 base/instruct 两个源模型。
 
 ```bash
 bash 01_prepare/make_venv.sh     # uv 建 venv，torch 2.8（输出应含 sm_120）
@@ -73,85 +75,126 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 
 ## 阶段 ② 量化（三段式，GPU，~35 分钟）
 
+**干什么**：用 dopt 把 HF 浮点权重转成 NPU int4 量化方案。产出三样东西、各有明确去向：
+- **`trained.pth`** —— **浮点原值 + 量化参数**的 checkpoint，量化在推理时**动态执行**（forward 里现场 clamp/round/反量化）——精度评测（PPL/生成对比）加载它来仿真 NPU 行为；
+- **`fake_quant_weight.pth`** —— **量化已烘进数值**的权重（每个浮点值 = s_w·round(w/s_w)）——阶段③导 ONNX 用：图是纯 float、没有量化节点，量化效果必须预先烤进权重常量（omg 后续再量化幂等无损，QUANTIZATION §2.11）；
+- **`quant_params_file`** —— 量化参数表，阶段④ omg 编译时吃它（注入 s16s4 融合算子）。
+
+三段各干一件事：stage1 GPTQ 逐层优化 int4 权重（误差补偿，吃校准语料）；stage2 EMA MinMax 定激活 int16 scale；stage3 把结果整理导出成上面三样。机制与最优配方见 QUANTIZATION.md §二/§一。
+
 > **推荐走统一入口**：`bash pipeline.sh <base|instruct> quant`（自动完成下面 5 步 + 防呆）。
 > 校准语料重建（可跳过，若 `data_zh_wiki/dataset.json` / `data_chat/dataset.json` 已在）：
 > `python 02_quant/data_zh_wiki/build_corpus.py`（zh 维基） / `python 02_quant/data_chat/build_corpus_chat.py`（Belle 对话，ChatML 渲染）。
+> 手动方式下述示例 = **instruct（各脚本默认口径，即实际部署形态）**；跑 base 需显式换三样环境变量
+> `TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml MODEL=$PWD/../01_prepare/models/Qwen2.5-1.5B`
+> （**MODEL 不可省**，默认已是 instruct 模型），group 换 128。
 
 ```bash
 source 01_prepare/venv/bin/activate
 cd 02_quant
-TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
-python edit_dopt_config.py qwen25_1b5_base_9020/dopt_config.json 128 --keep-lm-head-fp
-                                 # ②改策略：embed=MinMax, 196 linear=eco(g128,in16), lm_head=float
-TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
-TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
-TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
+# instruct 三件套（与各脚本默认值一致，写出来是为了明确）
+export TESTCASE=qwen25_1b5_instruct_9020 CFG=instruct_config.yaml \
+       MODEL=$PWD/../01_prepare/models/Qwen2.5-1.5B-Instruct
+bash run.sh stage1               # ①生成 dopt_config.json（198 节点全 float）
+python edit_dopt_config.py $TESTCASE/dopt_config.json 64 --keep-lm-head-fp
+                                 # ②改策略：embed=MinMax, 196 linear=eco(g64,in16), lm_head=float
+bash run.sh stage1               # ③权重量化 GPTQ ~19min → weight quant done!!!
+bash run.sh stage2               # ④激活校准 EMA ~10min → quant done !!!
+bash run.sh stage3               # ⑤参数提取 ~4min → quant params file build done
 ```
 
-**（可选）验证精度与生成质量**——推荐直接 `bash pipeline.sh <base|instruct> eval`（自动等价执行下面两组，GPU 被占时加 `EVAL_DEVICE=cpu`）：
+**（可选）验证精度与生成质量**——推荐直接 `bash pipeline.sh <base|instruct> eval`（GPU 被占时加 `EVAL_DEVICE=cpu`）。手动（instruct 口径，PPL 对话留出集劣化 +9.0%，见 QUANTIZATION.md §八；base 的维基口径与续写对比见 §三 + `continuation_compare.py`）：
 
 ```bash
-# ── base：PPL（维基留出集，交付口径劣化 +17.1%，见 QUANTIZATION.md §三）──
-python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
-  qwen25_1b5_base_9020/dopt_config.json \
-  qwen25_1b5_base_9020/train_output/trained.pth \
-  --tag base --data data_zh_wiki/test.txt --n_samples 8192
-python device_compare.py        # 续写对比（复刻端侧采样参数，FP vs 量化）
-
-# ── instruct：PPL（对话留出集，劣化 +9.0%，见 §八）──
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
   qwen25_1b5_instruct_9020/dopt_config.json \
   qwen25_1b5_instruct_9020/train_output/trained.pth \
   --tag instruct --data data_chat/test.txt --n_samples 8192
-python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
+python chat_compare.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \
   qwen25_1b5_instruct_9020/dopt_config.json \
   qwen25_1b5_instruct_9020/train_output/trained.pth   # 对话对比（内置 chat template）
 ```
 
 ## 阶段 ③ ONNX 导出（GPU，~3 分钟）
+
+**干什么**：加载阶段②的 `fake_quant_weight.pth`（伪量化浮点权重），导出 **"NPU 亲和"的 ONNX 图**（`model.onnx` + 外置权重 `model.pb`），同时落盘分离 embedding 的 int8 表和逐行 fp32 scale。
+
+- **为什么必须经 ONNX**：omg 不认 PyTorch、只接受 ONNX 输入（convert.sh 里 `--framework 5`）——ONNX 是 torch 世界与华为编译器之间的**交换格式**（静态图 + 常量权重），omg 才能在此基础上做算子融合和 shape 编译。
+- **"NPU 亲和"的含义**：不是随手 `torch.onnx.export` 导一份，而是 `npu_tuned_export` 工程按 NPU 编译器口味**定向改造过的图**，四件事：
+  1. **GEMM→MatMul**——阶段④的 s16s4 融合 pattern 只认 MatMul，用 GEMM 就是全量 `don't support`，量化白做；
+  2. **KV cache 显式外露**为输入/输出（FP16）——引擎逐 token 解码循环靠它喂缓存；
+  3. **动态长度只留 {decode=1, prefill=64} 两档**——NPU 是静态编译，每档各编专用 kernel；
+  4. **embedding 查表移出图**——token id 运行时才知道，数据相关的 Gather 无法静态编译 → CPU 查表、图直接收 `input_embed`（分离出的 int8 表 + 逐行 scale 就是本阶段产物之二）。
+- **位宽注意项**：图里**没有**激活量化节点（激活量化是阶段④由 omg 从阶段②的 `quant_params_file` 注入）；Linear 权重 int4、激活 int16、embedding **int8** 逐行缩放（embedding 是查表、无输出误差可优化，int8 足够）。
+
 ```bash
-bash 03_onnx_export/export.sh                          # base（默认 model_info_base.yaml）
-EXPORT_YAML=model_info_instruct.yaml OUT_SUBDIR=output_instruct_embedding_out_no_output_pos \
-  bash 03_onnx_export/export.sh                        # instruct（pipeline.sh 自动传）
+bash 03_onnx_export/export.sh        # instruct（= 各脚本默认；pipeline.sh 自动传参）
+# base：EXPORT_YAML=model_info_base.yaml OUT_SUBDIR=output_embedding_out_no_output_pos \
+#       bash 03_onnx_export/export.sh
 ```
 
 ## 阶段 ④ OMC 转换（~2 分钟）
+
+**干什么**：omg 把 ONNX 图编译成 kirin9020 专用的 `.omc` 离线模型，并按阶段②的 `quant_params_file` 把所有 MatMul 融合成 s16s4 融合算子。产物是 `.omc`（3.7M，图结构）+ `SubGraph_0.weight`（1.3G，外置权重）。
+
 ```bash
-bash 04_omc_convert/convert.sh                         # base（默认前缀 Qwen25_1b5_Base_kirin9020）
-QUANT_DIR=$PWD/02_quant/qwen25_1b5_instruct_9020 \
-ONNX_DIR=$PWD/03_onnx_export/output_instruct_embedding_out_no_output_pos \
-OUTPUT_PREFIX=./Qwen25_1b5_Instruct_kirin9020 \
-  bash 04_omc_convert/convert.sh                       # instruct（pipeline.sh 自动传）
+bash 04_omc_convert/convert.sh       # instruct（= 各脚本默认；pipeline.sh 自动传参）
+# base：QUANT_DIR=$PWD/02_quant/qwen25_1b5_base_9020 \
+#       ONNX_DIR=$PWD/03_onnx_export/output_embedding_out_no_output_pos \
+#       OUTPUT_PREFIX=./Qwen25_1b5_Base_kirin9020 \
+#       bash 04_omc_convert/convert.sh
 ```
 
 ## 阶段 ⑤ 端侧 7 文件
+
+**干什么**：把手机上跑起来所需的全部 7 个文件汇集到交付目录（`05_device_files_instruct/`，base 版目录名带 `_base`、文件名带 `_Base_`）——这就是最终交付形态。7 件分别是（以 instruct 为例）：
+
+1. **`Qwen25_1b5_Instruct_kirin9020.omc`**（3.7M）—— NPU 离线模型，图结构（阶段④产物）；
+2. **`SubGraph_0.weight`**（1.3G）—— 外置权重：int4 权重 + scale 表（阶段④产物，两模型同名，换模型必须整组重推）；
+3. **`model_instruct_64_2048.embedding_weights`**（223M）—— embedding int8 表（阶段③产物）；
+4. **`model_instruct_64_2048.embedding_dequant_scale`**（594K）—— embedding 逐行 fp32 scale（阶段③产物）；
+5. **`tokenizer.json`**（7M）—— 词表（取自源模型目录，base/instruct 词表相同）；
+6. **`context.json`** —— 采样配置：top-k/top-p/温度/重复惩罚/seed（base 用抗复读参数，instruct 用官方推荐值）；
+7. **`executor.json`** —— 引擎配置：模型/权重/embedding 的路径与 llm_config（层数/头数/档位等）。
+
+整个目录拷到连手机的 Windows 机，双击 `push_to_device_next.bat` 推进 App 沙箱即可。
+
 ```bash
-bash pack.sh                      # base（默认参数）
-bash pipeline.sh instruct pack                          # instruct（自动传参复用同一 pack.sh）
+bash pipeline.sh instruct pack     # instruct（= 裸跑 bash pack.sh 的默认值）
+bash pipeline.sh base pack         # base 同理（pipeline 自动传 base 一整套参数）
 ```
 
-**手机实机部署（路线 B / HarmonyOS NEXT，已在 Kirin9020 真机验证通过）**：
+**手机实机部署（HarmonyOS NEXT，已在 Kirin9020 真机验证通过；前置 = App 已按阶段⑥ 装好）**：
 
-**App 工程首次准备**：本仓库不含端侧 App 完整工程——克隆上游样例库到同级目录、
-覆盖 llm_demo.cpp 后用 DevEco Studio 构建安装（`git am` 打补丁方式与改动说明见
-`06_demo_next_app/README.md`；SDK 头文件与 `libhiai_llm_engine.so` 放置见
-`05_device_files_base/NEXT_端侧测试手册.md`）：
+1. `executor.json` / `context.json` 已改为 App 沙箱路径。**executor.json 里说的"绝对路径"一律指沙箱绝对路径**
+   （`/data/storage/el2/base/haps/entry/files/...`，App 进程视角；与 hdc 推送用的设备真实路径
+   `/data/app/el2/100/...` 是两套命名空间，对照表见 NEXT 手册）。三处路径、三种解析规则
+   （分属不同 JSON 块、引擎各自独立解析，勿统一写法——两种想当然都实测翻过车）：
+   - `model_path` / `weight_path`（autoregressive 块）：沙箱绝对路径，引擎直接加载；
+   - `tokenizer.path`（tokenizer 块）：同为沙箱绝对路径——写相对路径引擎找不到；
+   - `embedding_weights` / `embedding_dequant_scale`（llm_config 块）：**相对**文件名——引擎自动拼
+     `weight_path` 前缀，写绝对路径会被拼成双重路径。
+2. **换模型演示**：在连手机的 Windows 机器上运行交付目录里的 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，
+   脚本自动识别目录里的 Base/Instruct 文件名并核验。详细步骤与排错见 `05_device_files_base/NEXT_端侧测试手册.md`。
+
+## 阶段 ⑥ 端侧 App（CANNLLMEngineDemoNext，一次性准备）
+
+**干什么**：准备手机上真正跑模型的 HarmonyOS App。本仓库不含 App 完整工程——工程来自上游样例库，
+本仓库只保留核心源文件 `llm_demo.cpp` 的**定制改动**（`06_demo_harmony_next_app/`，未推上游）：
+UTF-8 流式半字符乱码修复（中文字符跨回调先攒后报）、instruct chat template 自动包装
+（prompt 未含 `<|im_start|>` 时自动套 ChatML）、端云三方对比测试钩子。
+
+**装一次即可**——与模型迭代无关，换模型只需重跑阶段⑤ 的 push，App 不用动；缺了这份定制则 App 不自动包装 chat template、中文可能半字符乱码。
+
 ```bash
+# 1. 克隆上游样例库到本仓库同级目录（阶段③ 的 npu_tuned_export 导出工程也来自它）
 git clone https://gitcode.com/HarmonyOS_Samples/cannkit_samplecode_lm_engine_cpp.git ../cannkit_samplecode_lm_engine_cpp
-cp 06_demo_next_app/llm_demo.cpp \
+# 2. 套用定制 llm_demo.cpp（覆盖即用，推荐；或 git am 06_demo_harmony_next_app/demo_next_llm_demo.patch 保留提交说明）
+cp 06_demo_harmony_next_app/llm_demo.cpp \
    ../cannkit_samplecode_lm_engine_cpp/CANN_LLM/CANN_LLM_Engine_Demo/CANNLLMEngineDemoNext/entry/src/main/cpp/llm_demo.cpp
 ```
 
-1. `executor.json` / `context.json` 已改为 App 沙箱路径（`/data/storage/el2/base/haps/entry/files/`），
-   注意三点：`model_path`/`weight_path` 用沙箱绝对路径；`tokenizer.path` 必须绝对路径；
-   `embedding_weights`/`embedding_dequant_scale` 必须保持相对文件名（引擎自动拼 weight_path 前缀）。
-2. 在连手机的 Windows 机器上运行交付目录里的 `push_to_device_next.bat`（或 Git Bash 跑 `.sh`）推送 7 文件，
-   脚本自动识别目录里的 Base/Instruct 文件名并核验。详细步骤与排错见 `05_device_files_base/NEXT_端侧测试手册.md`。
-3. 从本服务器拷贝 `SubGraph_0.weight` 后**务必核对大小**（base g128 = 1272421888 字节；instruct g64 见 pack 输出，
-   曾发生传输截断少 6.2MB 导致 `LoadPrivateWeight` 失败）。
-4. **换模型演示**：进另一个交付目录重跑 push 脚本（7 文件整组覆盖），完全退出并重启 App。
-
-旧的路线 A（`/data/local/tmp/qwen25_1b5/` + Demo 工程）仅作备用。
+之后用 DevEco Studio 打开 `CANNLLMEngineDemoNext` 工程构建、安装到手机——首次装完 App 沙箱目录才会出现，阶段⑤ 的 push 才有落点。工程内 SDK 文件（7 个头文件 + `libhiai_llm_engine.so`，来自 DDK 包）的放置与 hvigor/DevEco 兼容性说明在 `06_demo_harmony_next_app/README.md`；装好 App 后的模型推送与运行排障见 `05_device_files_base/NEXT_端侧测试手册.md`。
 
 ---
 
@@ -165,8 +208,9 @@ cp 06_demo_next_app/llm_demo.cpp \
 | ②.4 | `quant done !!!` | trained.pth ~6.0G |
 | ②.5 | `quant params file build done` | **quant_params_file：g128≈556M / g64≈1.1G**（690M 说明 quant_param_2 配错）+ fake_quant_weight.pth ~6.7G + embedding 223M/594K |
 | ③ | `generating finished` | model.onnx 439K + model.pb ~5.9G + model_64_2048.embedding_*（pack 时改名 model_{base,instruct}_*） |
-| ④ | `generate offline model success`，日志 **s16s4 融合数千次（g128 3136 / g64 4704）**、don't support=0 | **omc ~3.7M + SubGraph_0.weight：g128 1.27G / g64 1.35G** |
+| ④ | `generate offline model success`，日志 **s16s4 融合 g128 3136 / g64 4704 次**（按字符串出现次数计：`grep -o s16s4 log \| wc -l`；按行数 grep -c 会得到 3136 等歧义值）、don't support=0 | **omc ~3.7M + SubGraph_0.weight：g128 1.27G / g64 1.35G** |
 | ⑤ | 7 文件齐全（omc/embedding 文件名带 `_Base_`/`_Instruct_` 标记） | 总 ~1.5G（g64 版 ~1.6G） |
+| ⑥ | DevEco 构建安装成功、App 启动日志出现 `LLM Engine Init Done.`（装好后 push ⑤ 的 7 文件再重启 App） | 定制 llm_demo.cpp 已覆盖进 App 工程（一次性） |
 
 ## 常见问题（详见 QUANTIZATION.md 四）
 
@@ -177,6 +221,6 @@ cp 06_demo_next_app/llm_demo.cpp \
 | omg 全部 `MatMul don't support` | quant_param_2=True 或加了 output 段 → 改回 False/删 output |
 | 评测/仿真 PPL=nan | fp16 溢出 → 必须 fp32（eval_ppl.py 默认已是） |
 | 量化/评测 OOM | GPU 被他人占用（nvidia-smi 查）→ 等空闲或降 cutoff_len |
-| 对话测试输出乱码 | base 模型不支持 chat template（坑：chat_test 内置 template）→ base 用 device_compare.py 续写口径；chat 对话用 instruct 产线 |
+| 对话测试输出乱码 | base 模型不支持 chat template（坑：chat_compare 内置 template）→ base 用 continuation_compare.py 续写口径；chat 对话用 instruct 产线 |
 | torch CUDA `no kernel image` | torch 版本不含你的 sm 架构（5090 需 2.8+cu128） |
 | 想改 prefill 档位（16/128/三档） | **不支持**——档位在 dopt stage3 的 quant_params_file 里登记锁定为 {decode=1, prefill=64}，多档 omg 编译必失败（QUANTIZATION.md §三 prefill 档位实测） |

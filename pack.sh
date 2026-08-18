@@ -12,14 +12,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-# 环境变量覆盖（pipeline.sh 传；单独跑时默认 = base 交付版）
-OMC_NAME="${OMC_NAME:-Qwen25_1b5_Base_kirin9020}"
-OMC_DIR="${OMC_DIR:-$ROOT/04_omc_convert/Qwen25_1b5_Base_kirin9020}"
-EMB_DIR="${EMB_DIR:-$ROOT/03_onnx_export/output_embedding_out_no_output_pos}"
+# 环境变量覆盖（pipeline.sh 传；单独跑时默认 = instruct 交付版，即实际部署形态。base 走 pipeline.sh base pack）
+OMC_NAME="${OMC_NAME:-Qwen25_1b5_Instruct_kirin9020}"
+OMC_DIR="${OMC_DIR:-$ROOT/04_omc_convert/Qwen25_1b5_Instruct_kirin9020}"
+EMB_DIR="${EMB_DIR:-$ROOT/03_onnx_export/output_instruct_embedding_out_no_output_pos}"
 EMB_SRC_STEM="${EMB_SRC_STEM:-model_64_2048}"          # 导出侧名（= onnx名_prefill_kvlen，两条产线相同）
-EMB_STEM="${EMB_STEM:-model_base_64_2048}"             # 端侧名（带 Base/Instruct 标记，与 executor.json 一致）
-MODEL_DIR="${MODEL_DIR:-$ROOT/01_prepare/models/Qwen2.5-1.5B}"
-DEST_DIR="${DEST_DIR:-$ROOT/05_device_files_base}"
+EMB_STEM="${EMB_STEM:-model_instruct_64_2048}"         # 端侧名（带 Base/Instruct 标记，与 executor.json 一致）
+MODEL_DIR="${MODEL_DIR:-$ROOT/01_prepare/models/Qwen2.5-1.5B-Instruct}"
+DEST_DIR="${DEST_DIR:-$ROOT/05_device_files_instruct}"
 
 for f in "$OMC_DIR/${OMC_NAME}.omc" "$OMC_DIR/SubGraph_0.weight" \
          "$EMB_DIR/${EMB_SRC_STEM}.embedding_weights" "$EMB_DIR/${EMB_SRC_STEM}.embedding_dequant_scale" \

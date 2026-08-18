@@ -2,7 +2,7 @@
 """
 GPU 对话测试：对比浮点模型 vs 量化仿真模型的实际生成质量。
 用法:
-  python chat_test.py <model_path> <dopt_config> <quant_ckpt>
+  python chat_compare.py <model_path> <dopt_config> <quant_ckpt>
 输入问题后回车，FP 和 QUANT 各生成一次，对比输出。输入空行退出。
 """
 import sys, os, torch

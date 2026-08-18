@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # 一键部署: 从云侧拉取 device 文件 -> 推送手机 -> 校验 -> 重启 App 验证
 # 用法:
-#   bash 05_device_files_base/deploy_from_cloud.sh base       # 部署 base 版(默认)
-#   bash 05_device_files_base/deploy_from_cloud.sh instruct   # 部署 instruct 版
+#   bash 05_device_files_base/deploy_from_cloud.sh           # 部署 instruct 版(默认, 实际部署形态)
+#   bash 05_device_files_base/deploy_from_cloud.sh base      # 部署 base 版(续写演示用)
 # 前置:
 #   1. 手机已连 USB 且装过 App(首次用 DevEco 装一次即可)
 #   2. 云侧密码: export CANN_SSH_PASS='xxx' (不设则 ssh 交互式询问)
 set -uo pipefail
 
-VARIANT="${1:-base}"
+VARIANT="${1:-instruct}"
 CLOUD_HOST="chenyipei@10.232.200.8"
 CLOUD_DIR="/home/chenyipei/test_omc/qwen25_1b5_run/05_device_files_${VARIANT}"
 HDC="/c/Program Files/Huawei/DevEco Studio/sdk/default/openharmony/toolchains/hdc.exe"

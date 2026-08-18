@@ -6,11 +6,12 @@
 
 | 事项 | 位置 |
 |---|---|
-| SDK 头文件(7 个)已放入工程 | `CANNLLMEngineDemoNext/entry/src/main/cpp/include/` |
-| `libhiai_llm_engine.so` 已放入工程 | `CANNLLMEngineDemoNext/entry/src/main/cpp/lib64/` |
 | `llm_demo.cpp` InitParam 路径已修正(含缺斜杠笔误) | 指向沙箱 `/data/storage/el2/base/haps/entry/files/` |
 | 一键部署脚本(云侧拉取 → md5 校验 → 推送 → 重启验证) | `05_device_files_base/deploy_from_cloud.sh` |
-| 工程完整性核对(hvigor 5.0.5 / pages / 资源文件) | 与本机 DevEco Studio 6.1.1 兼容 |
+
+> App **工程侧**的准备事实(SDK 头文件/`libhiai_llm_engine.so` 放入工程、llm_demo.cpp 定制、
+> hvigor/DevEco 兼容性核对)属于阶段⑥,已移至 `06_demo_harmony_next_app/README.md`;
+> 本手册只管**模型文件部署与运行排障**。
 
 路径对照(记住这两行即可):
 
@@ -30,7 +31,7 @@ App 内部读沙箱路径:  /data/storage/el2/base/haps/entry/files
 
 ```bash
 export CANN_SSH_PASS='云侧密码'          # 不设则 ssh 交互式询问
-bash 05_device_files_base/deploy_from_cloud.sh base       # 或 instruct
+bash 05_device_files_base/deploy_from_cloud.sh    # 默认 instruct；部署 base 则加参数 base
 ```
 
 脚本特性:逐文件 md5/大小核验(防传输截断)、端云文件名完全一致(云侧叫什么,手机就叫什么)、
@@ -69,7 +70,7 @@ bash 05_device_files_base/deploy_from_cloud.sh base       # 或 instruct
 
 ```bash
 export CANN_SSH_PASS='云侧密码'
-bash 05_device_files_base/deploy_from_cloud.sh base       # 或 instruct
+bash 05_device_files_base/deploy_from_cloud.sh    # 默认 instruct；部署 base 则加参数 base
 ```
 
 脚本会自动:找 hdc → 检查设备和 App 已安装(沙箱目录存在)→ 从云侧拉 7 个文件并逐文件 md5 核验

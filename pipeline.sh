@@ -84,14 +84,14 @@ do_eval() {
         --tag "${PROFILE}" --device "$DEV" --n_samples 8192 --data "${PIPE_EVAL_DATA}" 2>&1 | tee "$ROOT/logs/eval_${PROFILE}.log" | grep -E "FP-|QUANT-|DELTA-|tokens"
     if [[ "$PIPE_MODEL" == *Instruct* ]]; then
         STEP "chat 生成质量对比（FP vs 量化仿真，chat template）"
-        CHAT_DEVICE="$DEV" "$PY" chat_test.py "$MODEL_DIR" "./${PIPE_TESTCASE}/dopt_config.json" \
+        CHAT_DEVICE="$DEV" "$PY" chat_compare.py "$MODEL_DIR" "./${PIPE_TESTCASE}/dopt_config.json" \
             "./${PIPE_TESTCASE}/train_output/trained.pth" \
             "你好，请做一下自我介绍。" "用三句话介绍一下长城的历史。" \
             "What is 25 multiplied by 37? Think step by step." \
             "写一个Python函数判断一个数是否是质数。" \
             < /dev/null 2>&1 | tee "$ROOT/logs/chat_${PROFILE}.log" | tail -5
     else
-        echo "（base 为续写模型，不走 chat template；生成质量对比见 02_quant/device_compare.py）"
+        echo "（base 为续写模型，不走 chat template；生成质量对比见 02_quant/continuation_compare.py）"
     fi
 }
 

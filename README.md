@@ -43,9 +43,9 @@ bash pipeline.sh <base|instruct> [quant|eval|export|convert|pack|status]   # 单
   提供 ONNX 导出工程（npu_tuned_export）与端侧 App 工程骨架；
 - **源模型** Qwen2.5-1.5B / Qwen2.5-1.5B-Instruct：`01_prepare/prepare.sh` 自动下载。
 
-**本仓库已内置端侧 App 的定制改动**（`06_demo_next_app/`：UTF-8 流式半字符乱码修复、
+**本仓库已内置端侧 App 的定制改动**（`06_demo_harmony_next_app/`：UTF-8 流式半字符乱码修复、
 instruct ChatML 自动包装、端云对比自动化测试钩子）——克隆者仅需上述公开上游 + 本仓库
-即可复现全部内容，详见 [06_demo_next_app/README.md](06_demo_next_app/README.md)。
+即可复现全部内容，详见 [06_demo_harmony_next_app/README.md](06_demo_harmony_next_app/README.md)。
 
 ## 文档导航
 

@@ -503,13 +503,13 @@ z ──rep惩罚──> ──温度──> ──top-k──> ──top-p─�
 
 ### 5.4 端云一致性：真机 NPU vs 云侧仿真（三方对比，2026-08-17 实测）
 
-对比三方：云侧 FP(bf16)、云侧量化仿真(fp32, device_compare.py)、真机 NPU int8 推理
+对比三方：云侧 FP(bf16)、云侧量化仿真(fp32, continuation_compare.py)、真机 NPU int8 推理
 （真机侧由 `05_device_files_base/collect_phone_replies.sh` 自动收集，统一 n=600 口径）。
 完整数据见 `02_quant/device_compare_report_3way_{sampling,greedy}.md`。要点：
 
 - **贪心不是逐 token 一致**：5 条 prompt 中 4 条在 0~30 字节内分叉（英文条 ~100 字节后分叉），
   与 repetition_penalty 无关（rep=1.0 对照组前缀基本相同）。
-- **embedding 差异已排除**：`device_compare.py --emb` 让云侧仿真加载端侧同款 int8 embedding
+- **embedding 差异已排除**：`continuation_compare.py --emb` 让云侧仿真加载端侧同款 int8 embedding
   （两时机替换 + 置零探针验证生效），输出与未替换**逐字节相同**——端侧 int8 embedding 反量化
   与原始权重最大绝对误差仅 0.0013，不足以翻转任何一步 argmax。
 - 结论：端云分叉源于**计算路径本身**（云=权重假量化+fp32 矩阵乘；端=s16s4 融合算子真 int 计算），
@@ -586,7 +586,7 @@ instruct 产线拿到全部交付版中最低的 +9.0%——g64（−1 PPL 级�
 | omc | 3.7M | ✅ |
 | 交付目录 | 05_device_files_instruct/（7 文件+脚本） | 命名：`Qwen25_1b5_Instruct_kirin9020.omc`、`model_instruct_64_2048.embedding_*` |
 
-### 8.6 生成质量（chat_test.py，greedy，chat template，128 token；完整输出 logs/chat_instruct.log）
+### 8.6 生成质量（chat_compare.py，greedy，chat template，128 token；完整输出 logs/chat_instruct.log）
 
 | 问题 | FP | QUANT(g64) | 评注 |
 |---|---|---|---|

@@ -1,7 +1,7 @@
 # instruct 端云三方对话输出对比 (2026-08-17)
 
 模型: Qwen2.5-1.5B-Instruct int8 (Kirin9020) | 采样(三方一致): seed=99, top-k=20, top-p=0.8, temp=0.7, rep=1.1, chat template 包装
-云侧: FP=bf16 原始 instruct 模型, QUANT=fp32 量化仿真 (device_compare.py --chat --n 600, config=qwen25_1b5_instruct_9020)
+云侧: FP=bf16 原始 instruct 模型, QUANT=fp32 量化仿真 (continuation_compare.py --chat --n 600, config=qwen25_1b5_instruct_9020)
 端侧: NPU 真 int8 推理, demo 自动套 chat template
 
 [对话] 你好，请介绍一下你自己。

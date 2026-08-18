@@ -2,24 +2,23 @@
 """
 端侧部署配置下的 FP vs 量化模型续写/对话对比（严格复刻 context.json）。
 
-采样协议 = 05_device_files_base/context.json 逐项:
+采样协议 = 05_device_files_instruct/context.json 逐项（默认 = instruct 部署参数）:
   seed=99(每个 prompt 前重置, FP/QUANT 消耗完全相同的随机数)
-  repetition_penalty=1.2(logits 除法) -> temperature=0.6 -> top-k=16 -> top-p=0.95(核采样)
+  repetition_penalty=1.1(logits 除法) -> temperature=0.7 -> top-k=20 -> top-p=0.8(核采样)
 FP 用 bf16(本机健康路径), 量化仿真用 fp32(dopt 量化算子在 fp16 下溢出 nan)。
 
 用法(自包含, 无需手工 export 环境变量):
-  python device_compare.py                          # 默认: g128+中文校准版, 内置续写 prompt
-  python device_compare.py --n 60                   # 短输出快速验证
-  python device_compare.py --chat                   # 追加 chat-template 对话测试(base 模型仅看退化程度)
-  python device_compare.py --greedy --n 600         # 贪心(对齐端侧 do_sample=false), 验证端云数值一致性
-  python device_compare.py --emb --greedy --n 600   # 量化仿真改用端侧同款 int8 embedding(跳过 FP 侧)
-  python device_compare.py --emb --probe            # 探针: embedding 置零, 验证其真在前向路径上
-  python device_compare.py \
-      --config qwen25_1b5_instruct_9020/dopt_config.json \
-      --ckpt   qwen25_1b5_instruct_9020/train_output/trained.pth   # 换 instruct(g64+对话校准)对比
-  DC_MODEL=.../Qwen2.5-1.5B-Instruct DC_TOP_K=20 DC_TOP_P=0.8 DC_TEMP=0.7 DC_REP=1.1 python device_compare.py \
-      --config qwen25_1b5_instruct_9020/...               # instruct 模型+其官方采样参数
-可复现性: 同机同 torch 版本下, 量化侧(fp32)输出与 logs/g128zh_device_compare.log 逐字一致。
+  python continuation_compare.py                          # 默认: instruct(g64+对话校准)部署口径, 内置续写 prompt
+  python continuation_compare.py --n 60                   # 短输出快速验证
+  python continuation_compare.py --chat                   # 追加 chat-template 对话测试
+  python continuation_compare.py --greedy --n 600         # 贪心(对齐端侧 do_sample=false), 验证端云数值一致性
+  python continuation_compare.py --emb --greedy --n 600   # 量化仿真改用端侧同款 int8 embedding(跳过 FP 侧)
+  python continuation_compare.py --emb --probe            # 探针: embedding 置零, 验证其真在前向路径上
+  CC_MODEL=.../Qwen2.5-1.5B CC_TOP_K=16 CC_TOP_P=0.95 CC_TEMP=0.6 CC_REP=1.2 python continuation_compare.py \
+      --config qwen25_1b5_base_9020/dopt_config.json \
+      --ckpt   qwen25_1b5_base_9020/train_output/trained.pth \
+      --emb-dir ../05_device_files_base --emb-stem model_base_64_2048   # base 版对比(抗复读采样参数)
+可复现性: 同机同 torch 版本下输出确定（贪心/固定 seed 采样）。
 """
 import os, sys, argparse, pathlib
 
@@ -31,11 +30,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 DEV = "cuda"
-MODEL = pathlib.Path(os.environ.get("DC_MODEL", str(ROOT / "01_prepare" / "models" / "Qwen2.5-1.5B")))  # DC_MODEL 可换 instruct 模型
+MODEL = pathlib.Path(os.environ.get("CC_MODEL", str(ROOT / "01_prepare" / "models" / "Qwen2.5-1.5B-Instruct")))  # CC_MODEL 可换 base 模型
 VOCAB, HIDDEN = 151936, 1536
-# 端侧 context.json 参数（改这里保持与部署一致）
+# 端侧 context.json 参数（改这里保持与部署一致；默认 = instruct 官方推荐值）
 import os as _os
-SEED = int(_os.environ.get("DC_SEED", "99")); TOP_K = int(_os.environ.get("DC_TOP_K", "16")); TOP_P = float(_os.environ.get("DC_TOP_P", "0.95")); TEMP = float(_os.environ.get("DC_TEMP", "0.6")); REP = float(_os.environ.get("DC_REP", "1.2"))  # 环境变量可覆盖, 对齐 instruct 采样参数用
+SEED = int(_os.environ.get("CC_SEED", "99")); TOP_K = int(_os.environ.get("CC_TOP_K", "20")); TOP_P = float(_os.environ.get("CC_TOP_P", "0.8")); TEMP = float(_os.environ.get("CC_TEMP", "0.7")); REP = float(_os.environ.get("CC_REP", "1.1"))  # 环境变量可覆盖, base 抗复读参数用 16/0.95/0.6/1.2
 
 CONT_PROMPTS = [
     "长城是中国古代的伟大工程，", "秋天到了，", "人工智能的发展，",
@@ -96,15 +95,15 @@ def run(model, tok, tag, n, chat, greedy=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="qwen25_1b5_base_9020/dopt_config.json")
-    ap.add_argument("--ckpt", default="qwen25_1b5_base_9020/train_output/trained.pth")
+    ap.add_argument("--config", default="qwen25_1b5_instruct_9020/dopt_config.json")
+    ap.add_argument("--ckpt", default="qwen25_1b5_instruct_9020/train_output/trained.pth")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--chat", action="store_true")
     ap.add_argument("--greedy", action="store_true", help="贪心解码(对应端侧 do_sample=false),仅用于端云数值一致性验证")
     ap.add_argument("--emb", action="store_true",
                     help="量化仿真加载端侧同款 int8 embedding(对齐端侧真实输入; 此模式跳过 FP 侧)")
-    ap.add_argument("--emb-dir", default=str(ROOT / "05_device_files_base"), help="embedding 两文件所在目录")
-    ap.add_argument("--emb-stem", default="model_base_64_2048", help="embedding 文件名主干")
+    ap.add_argument("--emb-dir", default=str(ROOT / "05_device_files_instruct"), help="embedding 两文件所在目录")
+    ap.add_argument("--emb-stem", default="model_instruct_64_2048", help="embedding 文件名主干")
     ap.add_argument("--probe", action="store_true", help="探针: embedding 置零, 验证 embed_tokens 真在前向路径上(配 --emb)")
     a = ap.parse_args()
     cfg, ckpt = ROOT / "02_quant" / a.config, ROOT / "02_quant" / a.ckpt
