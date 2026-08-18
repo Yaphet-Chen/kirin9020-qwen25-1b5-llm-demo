@@ -48,7 +48,7 @@ git am ../qwen25_1b5_run/06_demo_harmony_next_app/demo_next_llm_demo.patch
 
 工程兼容性已核对：hvigor 5.0.5 工程 + 本机 DevEco Studio 6.1.1 构建通过
 （pages/资源文件完整性一并核对过）。装好 App 后，模型文件推送与运行排障见
-`05_device_files_base/NEXT_端侧测试手册.md`。
+`06_demo_harmony_next_app/NEXT_端侧测试手册.md`。
 
 ## 文件清单
 

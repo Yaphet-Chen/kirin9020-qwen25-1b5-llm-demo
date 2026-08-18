@@ -31,5 +31,5 @@ bash pipeline.sh instruct status   # 查看产物状态
 
 ## 排障
 
-部署失败/加载报错的排查步骤见 `../05_device_files_base/NEXT_端侧测试手册.md`
+部署失败/加载报错的排查步骤见 `../06_demo_harmony_next_app/NEXT_端侧测试手册.md`
 （hilog 抓取、LoadPrivateWeight 失败等案例；`diagnose_load.bat` 同款用法）。
