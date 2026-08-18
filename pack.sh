@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # 阶段⑤：汇集端侧集成 7 文件（base 默认；instruct 由 pipeline.sh 传环境变量复用本脚本）
+# 位于仓库根——服务器侧产线脚本，不属于交付目录（交付目录只放设备侧要用的东西）。
 # 用法:
-#   bash 05_device_files_base/pack.sh                        # base（默认值）
-#   OMC_NAME=... EMB_STEM=... OMC_DIR=... DEST_DIR=... bash 05_device_files_base/pack.sh
+#   bash pack.sh                                            # base（默认值）
+#   OMC_NAME=... EMB_STEM=... OMC_DIR=... DEST_DIR=... bash pack.sh
 #      （pipeline.sh pack 自动传 instruct 参数）
 # 7 文件: omc + SubGraph_0.weight + embedding_weights + embedding_dequant_scale
 #        + tokenizer.json + context.json + executor.json
 # context.json / executor.json / 推送脚本不放本脚本拷贝——每个交付目录自带（base 与
 # instruct 的 sampler 参数、omc/embedding 文件名不同：*_Base_* / *_Instruct_*）
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # 环境变量覆盖（pipeline.sh 传；单独跑时默认 = base 交付版）
 OMC_NAME="${OMC_NAME:-Qwen25_1b5_Base_kirin9020}"

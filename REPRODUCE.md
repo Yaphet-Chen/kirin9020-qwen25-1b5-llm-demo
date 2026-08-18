@@ -124,7 +124,7 @@ OUTPUT_PREFIX=./Qwen25_1b5_Instruct_kirin9020 \
 
 ## 阶段 ⑤ 端侧 7 文件
 ```bash
-bash 05_device_files_base/pack.sh                      # base（默认参数）
+bash pack.sh                      # base（默认参数）
 bash pipeline.sh instruct pack                          # instruct（自动传参复用同一 pack.sh）
 ```
 

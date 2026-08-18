@@ -127,7 +127,7 @@ do_pack() {
     EMB_STEM="$PIPE_EMB_STEM" \
     MODEL_DIR="$MODEL_DIR" \
     DEST_DIR="$ROOT/${PIPE_DEVICE_DIR}" \
-    bash 05_device_files_base/pack.sh
+    bash pack.sh
 }
 
 # ---------- 状态 ----------
