@@ -13,8 +13,8 @@ model_arch: qwen2
 
 # 绝对路径（运行前按实际修改，或用 REPRODUCE.md 里的 sed 自动填充）
 hf_model_path: __ROOT__/01_prepare/models/Qwen2.5-1.5B
-config_file:  __ROOT__/02_quant/exp_g128_zh/dopt_config.json
-quant_pth:    __ROOT__/02_quant/exp_g128_zh/train_output/fake_quant_weight.pth
+config_file:  __ROOT__/02_quant/qwen25_1b5_base_9020/dopt_config.json
+quant_pth:    __ROOT__/02_quant/qwen25_1b5_base_9020/train_output/fake_quant_weight.pth
 
 run_mode: hardware
 

@@ -9,7 +9,7 @@ import os
 import sys
 from collections import Counter
 
-p = sys.argv[1] if len(sys.argv) > 1 else "exp_g128_zh/dopt_config.json"
+p = sys.argv[1] if len(sys.argv) > 1 else "qwen25_1b5_base_9020/dopt_config.json"
 group_size = int(sys.argv[2]) if len(sys.argv) > 2 else 64
 keep_lm_head_fp = "--keep-lm-head-fp" in sys.argv or os.environ.get("KEEP_LM_HEAD_FP", "1") == "1"
 # 可选: --linear-strategy X 把 decoder linear 换成其他策略（默认 Quant_act_weight_eco）

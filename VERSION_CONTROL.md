@@ -33,7 +33,7 @@
 
 不跟踪的（.gitignore 排除，可重建）:
   01_prepare/{venv,tools,models,cuda_stub}
-  02_quant/{qwen25_1b5_9020/, qwen25_1b5_instruct_9020/, exp_*/, data_zh/, data_chat/, *_config.yaml}
+  02_quant/{qwen25_1b5_base_9020/, qwen25_1b5_instruct_9020/, exp_*/, data_zh/, data_chat/, *_config.yaml}
   03_onnx_export/{output*/,dump/,npu_tuned_export/}    onnx 产物
   04_omc_convert/{model.*,Qwen25_1b5_*/}
   05_device_files*/{*.omc,*.weight,embedding*,tokenizer.json}

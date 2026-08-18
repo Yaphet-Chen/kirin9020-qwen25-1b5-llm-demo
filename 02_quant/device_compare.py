@@ -96,8 +96,8 @@ def run(model, tok, tag, n, chat, greedy=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="exp_g128_zh/dopt_config.json")
-    ap.add_argument("--ckpt", default="exp_g128_zh/train_output/trained.pth")
+    ap.add_argument("--config", default="qwen25_1b5_base_9020/dopt_config.json")
+    ap.add_argument("--ckpt", default="qwen25_1b5_base_9020/train_output/trained.pth")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--chat", action="store_true")
     ap.add_argument("--greedy", action="store_true", help="贪心解码(对应端侧 do_sample=false),仅用于端云数值一致性验证")

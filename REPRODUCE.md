@@ -18,7 +18,7 @@ FORCE=1 bash pipeline.sh <p> quant # 强制重量化
 
 - 同一套阶段脚本（02~05），差异全部收在 `profiles/{base,instruct}.env`：模型 / group_size / 校准语料 / 导出 yaml / 产物命名 / 交付目录。
 - **演示流程**：先 `bash pipeline.sh base` 再 `bash pipeline.sh instruct`，产物分别落在 `05_device_files_base/`、`05_device_files_instruct/`；两个目录各自拷到连手机的 Windows 机，分别跑各自的 `push_to_device_next.bat`（换模型必须整组 7 文件重推，`SubGraph_0.weight` 两模型同名）。
-- **命名约定**（base/instruct 一眼可区分）：omc `Qwen25_1b5_{Base,Instruct}_kirin9020.omc`；embedding `model_{base,instruct}_64_2048.embedding_*`；量化工程 `02_quant/{exp_g128_zh,qwen25_1b5_instruct_9020}`。
+- **命名约定**（base/instruct 一眼可区分）：omc `Qwen25_1b5_{Base,Instruct}_kirin9020.omc`；embedding `model_{base,instruct}_64_2048.embedding_*`；量化工程 `02_quant/{qwen25_1b5_base_9020,qwen25_1b5_instruct_9020}`。
 
 ## 现场演示预检
 
@@ -57,7 +57,7 @@ qwen25_1b5_run/
 │   ├── run.sh  edit_dopt_config.py  run_experiment.sh
 │   ├── eval_ppl.py  chat_test.py  device_compare.py
 │   ├── _autopatch/               #   transformers 4.51 兼容补丁（KD 用；PTQ 也无害）
-│   ├── exp_g128_zh/              #   (生成) base 交付量化工程（g128+zh）
+│   ├── qwen25_1b5_base_9020/              #   (生成) base 交付量化工程（g128+zh）
 │   └── qwen25_1b5_instruct_9020/ #   (生成) instruct 量化工程（g64+chat）
 ├── 03_onnx_export/               # 阶段③ export.sh（EXPORT_YAML 可换）+ base/instruct 两份 yaml
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
@@ -87,18 +87,18 @@ prepare.sh 四件事：组装 `tools/`（插件进 platform）→ 下载 Qwen2.5
 ```bash
 source 01_prepare/venv/bin/activate
 cd 02_quant
-TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
-python edit_dopt_config.py exp_g128_zh/dopt_config.json 128 --keep-lm-head-fp
+TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage1   # ①生成 dopt_config.json（198 节点全 float）
+python edit_dopt_config.py qwen25_1b5_base_9020/dopt_config.json 128 --keep-lm-head-fp
                                  # ②改策略：embed=MinMax, 196 linear=eco(g128,in16), lm_head=float
-TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
-TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
-TESTCASE=exp_g128_zh CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
+TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage1   # ③权重量化 GPTQ ~19min → weight quant done!!!
+TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage2   # ④激活校准 EMA ~10min → quant done !!!
+TESTCASE=qwen25_1b5_base_9020 CFG=config.yaml bash run.sh stage3   # ⑤参数提取 ~4min → quant params file build done
 ```
 
 **（可选）验证精度与生成质量**
 ```bash
 python eval_ppl.py ../01_prepare/models/Qwen2.5-1.5B \
-  exp_g128_zh/dopt_config.json exp_g128_zh/train_output/trained.pth \
+  qwen25_1b5_base_9020/dopt_config.json qwen25_1b5_base_9020/train_output/trained.pth \
   --tag repro --n_samples 8192 --data data_zh/test_zh.txt   # 交付版中文口径（QUANTIZATION.md §三）
 python device_compare.py                                     # base 续写对比（端侧采样参数复刻）
 python chat_test.py ../01_prepare/models/Qwen2.5-1.5B-Instruct \

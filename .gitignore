@@ -8,6 +8,7 @@
 
 # 量化工程产物与试验目录
 02_quant/qwen25_1b5_9020/
+02_quant/qwen25_1b5_base_9020/
 02_quant/qwen25_1b5_instruct_9020/
 02_quant/exp_*/
 02_quant/data_zh/
