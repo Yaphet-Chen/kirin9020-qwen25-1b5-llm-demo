@@ -55,7 +55,7 @@ qwen25_1b5_run/
 ├── 03_onnx_export/               # 阶段③ export.sh + model_info_{base,instruct}.yaml
 ├── 04_omc_convert/               # 阶段④ convert.sh（OUTPUT_PREFIX 可换）
 ├── 05_device_files_base/         # 阶段⑤ base 交付目录（7 文件 + push/collect/deploy 脚本）
-├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push 脚本 + README_DEMO）
+├── 05_device_files_instruct/     # 阶段⑤ instruct 交付目录（7 文件 + push/diagnose 脚本）
 ├── 06_demo_harmony_next_app/     # 阶段⑥ 端侧 App 与实机部署（定制 llm_demo.cpp + patch + NEXT 端侧测试手册）
 └── logs/                         # 各阶段日志
 ```
@@ -201,7 +201,8 @@ cp 06_demo_harmony_next_app/llm_demo.cpp \
 
 在连手机的 Windows 机上，交付目录里双击 `push_to_device_next.bat`（自动识别 Base/Instruct 文件名
 并逐项核验），推送后完全退出并重启 App；或用 `deploy_from_cloud.sh` 一键"云侧拉取→md5 校验→推送→
-重启验证"。`SubGraph_0.weight` 两模型同名，换模型必须**整组 7 文件重推**。
+重启验证"。`SubGraph_0.weight` 两模型同名，换模型必须**整组 7 文件重推**。演示对话**直接输入问题即可**
+——定制 App 检测到 prompt 未含 `<|im_start|>` 时自动套 ChatML，引擎侧已配 `<|im_end|>` 停止符。
 
 **executor.json 路径三规则**（已配好，改动时勿破坏；三处分属不同 JSON 块、引擎各自独立解析）：
 executor.json 里的"绝对路径"一律指**沙箱绝对路径**（`/data/storage/el2/base/haps/entry/files/...`，
