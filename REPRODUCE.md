@@ -212,4 +212,4 @@ App 进程视角；与 hdc 推送用的设备真实路径 `/data/app/el2/100/...
 - `embedding_weights` / `embedding_dequant_scale`（llm_config 块）：**相对**文件名——引擎自动拼
   `weight_path` 前缀，写绝对路径会被拼成双重路径。
 
-详细步骤与排障：`06_demo_harmony_next_app/NEXT_端侧测试手册.md`。
+详细步骤与排障：`06_demo_harmony_next_app/README.md（端侧部署指南）`。
